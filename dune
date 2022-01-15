@@ -1,0 +1,3 @@
+(library
+ (name typed_algebraic_parsing)
+ (libraries base))
