@@ -228,8 +228,8 @@ let rec parse : type ctx a. (ctx, a, Type.t) Grammar.t -> ctx Parse_env.t -> a p
     let first_set = (data g).Type.first in
     let rec go ret s =
       match Stream.peek s with
-      | None -> ret
-      | Some c -> if Set.mem first_set c then go (p s :: ret) s else List.rev ret
+      | Some c when Set.mem first_set c -> go (p s :: ret) s
+      | _ -> List.rev ret
     in
     go []
   | Fix g ->
