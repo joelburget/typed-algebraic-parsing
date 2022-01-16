@@ -140,23 +140,17 @@ module Env (T : sig
 end) =
 struct
   type 'ctx t =
-    | Empty : unit t
-    | Nonempty : 'a T.t * 'ctx t -> ('a * 'ctx) t
+    | [] : unit t
+    | ( :: ) : 'a T.t * 'ctx t -> ('a * 'ctx) t
 
   let rec lookup : type ctx a. ctx t -> (ctx, a) Var.t -> a T.t =
-   fun ctx v ->
-    match ctx, v with
-    | Nonempty (x, _), Z -> x
-    | Nonempty (_, xs), S v -> lookup xs v
-    | _ -> .
+   fun ctx v -> match ctx, v with x :: _, Z -> x | _ :: xs, S v -> lookup xs v | _ -> .
  ;;
 
   type fn = { f : 'a. 'a T.t -> 'a T.t }
 
   let rec map : type ctx. fn -> ctx t -> ctx t =
-   fun { f } -> function
-    | Empty -> Empty
-    | Nonempty (x, xs) -> Nonempty (f x, map { f } xs)
+   fun { f } -> function [] -> [] | x :: xs -> f x :: map { f } xs
  ;;
 end
 
@@ -183,9 +177,9 @@ let rec typeof : type ctx a d. ctx Type_env.t -> (ctx, a, d) Grammar.t -> Type.t
   | Alt (g1, g2) -> Type.alt (typeof env g1) (typeof env g2)
   | Map (_, g) -> typeof env g (* TODO: is this right? *)
   | Fix g ->
-    let ty = Type.fix (fun ty -> typeof (Nonempty (ty, env)) g) in
+    let ty = Type.fix (fun ty -> typeof (ty :: env) g) in
     Type.check ty.Type.guarded "fix must be guarded";
-    typeof (Nonempty (ty, env)) g
+    typeof (ty :: env) g
   | Star g -> Type.star (typeof env g)
   | Var v -> Type_env.lookup env v
 ;;
@@ -216,7 +210,7 @@ let rec parse : type ctx a. (ctx, a, Type.t) Grammar.t -> ctx Parse_env.t -> a p
   | Fix g ->
     let r = ref (fun _ -> assert false) in
     let p s = !r s in
-    let q = parse g (Nonempty (p, env)) in
+    let q = parse g (p :: env) in
     r := q;
     p
   | Var n -> Parse_env.lookup env n
@@ -230,7 +224,7 @@ module Hoas = struct
   type 'a t = { tdb : 'ctx. 'ctx Ctx.t -> ('ctx, 'a, unit) Grammar.t }
 
   let rec len : type n. n Ctx.t -> int =
-   fun ctx -> match ctx with Empty -> 0 | Nonempty (_, ctx) -> 1 + len ctx
+   fun ctx -> match ctx with [] -> 0 | _ :: ctx -> 1 + len ctx
  ;;
 
   let rec tshift' : type a i j. int -> j Ctx.t -> (a * i) Ctx.t -> (j, a) Var.t =
@@ -241,9 +235,9 @@ module Hoas = struct
        (a * i) is a prefix of j.
        More details: "Unembedding Domain Specific Languages" §4.4.
      *)
-    | _, Empty, _ -> assert false
-    | 0, Nonempty _, Nonempty _ -> Stdlib.Obj.magic Var.Z
-    | n, Nonempty ((), c1), c2 -> Var.S (tshift' (n - 1) c1 c2)
+    | _, [], _ -> assert false
+    | 0, _ :: _, _ :: _ -> Stdlib.Obj.magic Var.Z
+    | n, () :: c1, c2 -> Var.S (tshift' (n - 1) c1 c2)
  ;;
 
   let tshift : type a i j. j Ctx.t -> (a * i) Ctx.t -> (j, a) Var.t =
@@ -261,10 +255,7 @@ module Hoas = struct
    fun f ->
     { tdb =
         (fun i ->
-          ( ()
-          , Fix
-              ((f { tdb = (fun j -> (), Var (tshift j (Nonempty ((), i)))) }).tdb
-                 (Nonempty ((), i))) ))
+          (), Fix ((f { tdb = (fun j -> (), Var (tshift j (() :: i))) }).tdb (() :: i)))
     }
  ;;
 

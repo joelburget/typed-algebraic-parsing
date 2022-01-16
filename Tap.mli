@@ -37,8 +37,8 @@ module Env (T : sig
   type 'a t
 end) : sig
   type 'ctx t =
-    | Empty : unit t
-    | Nonempty : 'a T.t * 'ctx t -> ('a * 'ctx) t
+    | [] : unit t
+    | ( :: ) : 'a T.t * 'ctx t -> ('a * 'ctx) t
 
   val lookup : 'ctx t -> ('ctx, 'a) Var.t -> 'a T.t
 
