@@ -7,7 +7,9 @@ end
 
 type 'a parser = char Stream.t -> 'a
 
-let error fmt = Stdlib.Format.kasprintf failwith fmt
+exception Parse_error of string
+
+let error fmt = Stdlib.Format.kasprintf (fun str -> raise (Parse_error str)) fmt
 
 module Type = struct
   type t =
@@ -17,18 +19,19 @@ module Type = struct
     ; guarded : bool
     }
 
-  let pp_set ppf set = Fmt.(braces (list ~sep:comma char) ppf (Set.to_list set))
+  let pp_char ppf = Fmt.pf ppf "%C"
+  let pp_set ppf set = Fmt.(braces (list ~sep:comma pp_char) ppf (Set.to_list set))
 
-  let pp ppf { first; flast; null; guarded } =
-    Fmt.pf
-      ppf
-      "{ first = %a; flast = %a; null = %b; guarded = %b }"
-      pp_set
-      first
-      pp_set
-      flast
-      null
-      guarded
+  let pp =
+    Fmt.(
+      braces
+        (record
+           ~sep:semi
+           [ field "first" (fun t -> t.first) pp_set
+           ; field "flast" (fun t -> t.flast) pp_set
+           ; field "null" (fun t -> t.null) bool
+           ; field "guarded" (fun t -> t.guarded) bool
+           ]))
   ;;
 
   let ( = ) t1 t2 =
@@ -37,7 +40,7 @@ module Type = struct
     && Bool.(t1.null = t2.null && t1.guarded = t2.guarded)
   ;;
 
-  let check b msg = if b then () else failwith msg
+  let check b msg = if not b then failwith msg
   let empty = Set.empty (module Char)
   let singleton = Set.singleton (module Char)
   let ( ==> ) b cs = if b then cs else empty
@@ -48,7 +51,7 @@ module Type = struct
   let apart t1 t2 = Set.(is_empty (inter t1.first t2.first)) && not (t1.null && t2.null)
 
   let alt t1 t2 =
-    check (apart t1 t2) "alt must be apart";
+    check (apart t1 t2) (Fmt.str "alt must be apart @[(%a@ vs@ %a)@]" pp t1 pp t2);
     { first = Set.union t1.first t2.first
     ; flast = Set.union t1.flast t2.flast
     ; null = t1.null || t2.null
@@ -57,7 +60,7 @@ module Type = struct
   ;;
 
   let seq t1 t2 =
-    check (separable t1 t2) "seq must be separable";
+    check (separable t1 t2) (Fmt.str "seq must be separable @[(%a@ vs@ %a)@]" pp t1 pp t2);
     { first = t1.first
     ; flast = Set.union t2.flast (t2.null ==> Set.union t2.first t1.flast)
     ; null = false
@@ -90,7 +93,7 @@ module Parse = struct
       then (
         Stream.junk s;
         c)
-      else error "Unexpected char"
+      else error "Unexpected char %C (expected %C)" c' c
   ;;
 
   let bot _ = error "bottom"
@@ -327,27 +330,28 @@ module Hoas = struct
     end
 
     let infixr op base =
-      fix (fun g ->
-          base ++ option (op ++ g) ==> function e, None -> e | e, Some (f, e') -> f e e')
+      let process (accum, rhs) =
+        match rhs with None -> accum | Some (f, e') -> f accum e'
+      in
+      fix (fun g -> base ++ option (op ++ g) ==> process)
     ;;
 
     let infixl op base =
-      let reassociate (e, oes) =
-        List.fold_left ~f:(fun e (f, e') -> f e e') ~init:e oes
+      let reassociate (init, oes) =
+        List.fold_left ~f:(fun e (op, e') -> op e e') ~init oes
       in
       base ++ star (op ++ base) ==> reassociate
     ;;
 
-    let infix aos base =
-      let make_level base = function
-        | Left, op -> infixl op base
-        | Right, op -> infixr op base
+    let infix ops base =
+      let make_level base (fixity, op) =
+        match fixity with Left -> infixl op base | Right -> infixr op base
       in
-      List.fold_left ~f:make_level ~init:base aos
+      List.fold_left ~f:make_level ~init:base ops
     ;;
 
     module Arith = struct
-      let digits = star (charset "0123456789")
+      let digits = plus (charset "0123456789")
 
       let num : float t =
         digits ++ chr '.' ++ digits
@@ -384,11 +388,24 @@ let%test_module _ =
       go upper;
       [%expect
         {|
-        { first = {}; flast = {}; null = true; guarded = true }
-        { first = {a}; flast = {}; null = false; guarded = true }
-        { first = {}; flast = {}; null = false; guarded = true }
-        { first = {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V,
-                   W, X, Y, Z}; flast = {}; null = false; guarded = true } |}]
+        {first: {};
+         flast: {};
+         null: true;
+         guarded: true}
+        {first: {'a'};
+         flast: {};
+         null: false;
+         guarded: true}
+        {first: {};
+         flast: {};
+         null: false;
+         guarded: true}
+        {first:
+          {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
+           'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'};
+         flast: {};
+         null: false;
+         guarded: true} |}]
     ;;
 
     let typecheck : type a. a Hoas.t -> (unit, a, Type.t) Grammar.t =
@@ -399,7 +416,7 @@ let%test_module _ =
 
     let go p pp str =
       try Fmt.pr "@[%a@]@." pp (parse p (Stream.of_string str)) with
-      | _ -> Fmt.pr "failed parse@."
+      | Parse_error msg -> Fmt.pr "failed parse: %s@." msg
     ;;
 
     let%expect_test "chr" =
@@ -407,7 +424,7 @@ let%test_module _ =
       go (chr 'c') Fmt.char "d";
       [%expect {|
         c
-        failed parse |}]
+        failed parse: Unexpected char 'd' (expected 'c') |}]
     ;;
 
     let%expect_test "eps" =
@@ -420,7 +437,7 @@ let%test_module _ =
 
     let%expect_test "bot" =
       go bot (Fmt.any "()") "c";
-      [%expect {| failed parse |}]
+      [%expect {| failed parse: bottom |}]
     ;;
 
     let%expect_test "seq" =
@@ -435,7 +452,7 @@ let%test_module _ =
       [%expect {|
         a
         b
-        failed parse |}]
+        failed parse: No progress possible |}]
     ;;
 
     let%expect_test "star, plus, map" =
@@ -444,12 +461,18 @@ let%test_module _ =
       go (plus (chr 'a')) Fmt.(list char) "";
       go (plus (chr 'a')) Fmt.(list char) "aaa";
       go (map (List.map ~f:Char.uppercase) (plus (chr 'a'))) Fmt.(list char) "aaa";
-      [%expect {|
+      [%expect
+        {|
 
         aaa
-        failed parse
+        failed parse: Unexpected end of stream
         aaa
         AAA |}]
+    ;;
+
+    let%expect_test "star again" =
+      go (star (charset "ab")) Fmt.(list char) "abbb";
+      [%expect "abbb"]
     ;;
 
     let%expect_test "any, option" =
@@ -478,11 +501,11 @@ let%test_module _ =
       [%expect
         {|
         a
-        failed parse
-        failed parse
+        failed parse: No progress possible
+        failed parse: No progress possible
         A
         a
-        failed parse |}]
+        failed parse: No progress possible |}]
     ;;
 
     let%expect_test "sexp" =
@@ -494,6 +517,54 @@ let%test_module _ =
         ()
         foo
         (foo bar) |}]
+    ;;
+
+    let%expect_test "infixr" =
+      let p = infixr (chr ',' ==> fun _ -> List.append) (lower ==> List.return) in
+      let go' = go p Fmt.(brackets (list ~sep:comma char)) in
+      go' "a,b,c";
+      [%expect {| [a, b, c] |}]
+    ;;
+
+    let%expect_test "infixl" =
+      let p = infixl (chr ',' ==> fun _ -> List.append) (lower ==> List.return) in
+      let go' = go p Fmt.(brackets (list ~sep:comma char)) in
+      go' "a,b,c";
+      [%expect {| [a, b, c] |}]
+    ;;
+
+    (* TODO:
+     * Parse more general literals
+     * Without needing parens
+     * Allow whitespace
+     * Check stream has been consumed
+     *)
+    let%expect_test "arith" =
+      let go' = go Arith.digits Fmt.(list char) in
+      go' "12";
+      let go' = go (Arith.digits ++ chr '.' ==> fst) Fmt.(list char) in
+      go' "12.";
+      let go' = go (chr '.' ++ Arith.digits ==> snd) Fmt.(list char) in
+      go' ".12";
+      let go' = go Arith.num Fmt.float in
+      go' "1.2";
+      go' "0.1";
+      go' "1.0";
+      let go' = go Arith.arith Fmt.float in
+      go' "(1.0+2.0)";
+      go' "(1.0*2.0)";
+      go' "(2.0^2.0)";
+      [%expect
+        {|
+        12
+        12
+        12
+        1.2
+        0.1
+        1
+        3
+        2
+        4 |}]
     ;;
   end)
 ;;

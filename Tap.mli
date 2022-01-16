@@ -70,6 +70,8 @@ module Hoas : sig
       | Left
       | Right
 
+    val ( ++ ) : 'a t -> 'b t -> ('a * 'b) t
+    val ( ==> ) : 'a t -> ('a -> 'b) -> 'b t
     val any : 'a t list -> 'a t
     val option : 'a t -> 'a option t
     val plus : 'a t -> 'a list t
