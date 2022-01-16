@@ -30,7 +30,7 @@ module Var : sig
 end
 
 module Grammar : sig
-  type ('ctx, 't) t
+  type ('ctx, 't, 'd) t
 end
 
 module Env (T : sig
@@ -50,8 +50,8 @@ end
 type _ type_env
 type _ parse_env
 
-val typeof : 'ctx type_env -> ('ctx, 'a) Grammar.t -> Type.t
-val parse : ('ctx, 'a) Grammar.t -> 'ctx parse_env -> 'a parser
+val typeof : 'ctx type_env -> ('ctx, 'a, 'd) Grammar.t -> Type.t
+val parse : ('ctx, 'a, Type.t) Grammar.t -> 'ctx parse_env -> 'a parser
 
 module Hoas : sig
   type 't t

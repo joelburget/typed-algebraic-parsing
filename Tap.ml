@@ -119,16 +119,20 @@ module Var = struct
 end
 
 module Grammar = struct
-  type ('ctx, 'a) t =
-    | Eps : ('ctx, unit) t
-    | Seq : ('ctx, 'a) t * ('ctx, 'b) t -> ('ctx, 'a * 'b) t
-    | Chr : char -> ('ctx, char) t
-    | Bot : ('ctx, 'a) t
-    | Alt : ('ctx, 'a) t * ('ctx, 'a) t -> ('ctx, 'a) t
-    | Map : ('a -> 'b) * ('ctx, 'a) t -> ('ctx, 'b) t
-    | Fix : ('a * 'ctx, 'a) t -> ('ctx, 'a) t
-    | Var : ('ctx, 'a) Var.t -> ('ctx, 'a) t
-  (* TODO: star? *)
+  type ('ctx, 'a, 'd) t' =
+    | Eps : ('ctx, unit, 'd) t'
+    | Seq : ('ctx, 'a, 'd) t * ('ctx, 'b, 'd) t -> ('ctx, 'a * 'b, 'd) t'
+    | Chr : char -> ('ctx, char, 'd) t'
+    | Bot : ('ctx, 'a, 'd) t'
+    | Alt : ('ctx, 'a, 'd) t * ('ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
+    | Map : ('a -> 'b) * ('ctx, 'a, 'd) t -> ('ctx, 'b, 'd) t'
+    | Fix : ('a * 'ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
+    | Star : ('ctx, 'a, 'd) t -> ('ctx, 'a list, 'd) t'
+    | Var : ('ctx, 'a) Var.t -> ('ctx, 'a, 'd) t'
+
+  and ('ctx, 'a, 'd) t = 'd * ('ctx, 'a, 'd) t'
+
+  let data (d, _) = d
 end
 
 module Env (T : sig
@@ -167,8 +171,9 @@ end)
 type 'a type_env = 'a Type_env.t
 type 'a parse_env = 'a Parse_env.t
 
-let rec typeof : type ctx a. ctx Type_env.t -> (ctx, a) Grammar.t -> Type.t =
- fun env -> function
+let rec typeof : type ctx a d. ctx Type_env.t -> (ctx, a, d) Grammar.t -> Type.t =
+ fun env (_, g) ->
+  match g with
   | Eps -> Type.eps
   | Seq (g1, g2) ->
     let env' = Type_env.map { f = (fun ty -> { ty with guarded = true }) } env in
@@ -184,8 +189,8 @@ let rec typeof : type ctx a. ctx Type_env.t -> (ctx, a) Grammar.t -> Type.t =
   | Var v -> Type_env.lookup env v
 ;;
 
-let rec parse : type ctx a. (ctx, a) Grammar.t -> ctx Parse_env.t -> a parser =
- fun g env ->
+let rec parse : type ctx a. (ctx, a, Type.t) Grammar.t -> ctx Parse_env.t -> a parser =
+ fun (_, g) env ->
   let open Parse in
   match g with
   | Eps -> eps
@@ -206,7 +211,7 @@ module Hoas = struct
     type _ t = unit
   end)
 
-  type 'a t = { tdb : 'ctx. 'ctx Ctx.t -> ('ctx, 'a) Grammar.t }
+  type 'a t = { tdb : 'ctx. 'ctx Ctx.t -> ('ctx, 'a, unit) Grammar.t }
 
   let rec len : type n. n Ctx.t -> int =
    fun ctx -> match ctx with Empty -> 0 | Nonempty (_, ctx) -> 1 + len ctx
@@ -229,20 +234,21 @@ module Hoas = struct
    fun c1 c2 -> tshift' (len c1 - len c2) c1 c2
  ;;
 
-  let eps = { tdb = (fun _ -> Eps) }
-  let chr c = { tdb = (fun _ -> Chr c) }
-  let bot = { tdb = (fun _ -> Bot) }
-  let seq f g = { tdb = (fun ctx -> Seq (f.tdb ctx, g.tdb ctx)) }
-  let alt x y = { tdb = (fun ctx -> Alt (x.tdb ctx, y.tdb ctx)) }
-  let map f a = { tdb = (fun ctx -> Map (f, a.tdb ctx)) }
+  let eps = { tdb = (fun _ -> (), Eps) }
+  let chr c = { tdb = (fun _ -> (), Chr c) }
+  let bot = { tdb = (fun _ -> (), Bot) }
+  let seq f g = { tdb = (fun ctx -> (), Seq (f.tdb ctx, g.tdb ctx)) }
+  let alt x y = { tdb = (fun ctx -> (), Alt (x.tdb ctx, y.tdb ctx)) }
+  let map f a = { tdb = (fun ctx -> (), Map (f, a.tdb ctx)) }
 
   let fix : type b. (b t -> b t) -> b t =
    fun f ->
     { tdb =
         (fun i ->
-          Fix
-            ((f { tdb = (fun j -> Var (tshift j (Nonempty ((), i)))) }).tdb
-               (Nonempty ((), i))))
+          ( ()
+          , Fix
+              ((f { tdb = (fun j -> (), Var (tshift j (Nonempty ((), i)))) }).tdb
+                 (Nonempty ((), i))) ))
     }
  ;;
 
