@@ -186,11 +186,13 @@ let rec typeof : type ctx a d. ctx Type_env.t -> (ctx, a, d) Grammar.t -> Type.t
     let ty = Type.fix (fun ty -> typeof (Nonempty (ty, env)) g) in
     Type.check ty.Type.guarded "fix must be guarded";
     typeof (Nonempty (ty, env)) g
+  | Star g -> Type.star (typeof env g)
   | Var v -> Type_env.lookup env v
 ;;
 
 let rec parse : type ctx a. (ctx, a, Type.t) Grammar.t -> ctx Parse_env.t -> a parser =
  fun (_, g) env ->
+  let data = Grammar.data in
   let open Parse in
   match g with
   | Eps -> eps
@@ -200,9 +202,18 @@ let rec parse : type ctx a. (ctx, a, Type.t) Grammar.t -> ctx Parse_env.t -> a p
     seq p1 p2
   | Chr c -> chr c
   | Bot -> bot
-  | Alt _ -> failwith "TODO"
+  | Alt (g1, g2) -> alt (data g1) (parse g1 env) (data g2) (parse g2 env)
   | Map (f, g) -> parse g env |> map f
   | Fix _ -> failwith "TODO"
+  | Star g ->
+    let p = parse g env in
+    let first_set = (data g).Type.first in
+    let rec go ret s =
+      match Stream.peek s with
+      | None -> ret
+      | Some c -> if Set.mem first_set c then go (p s :: ret) s else List.rev ret
+    in
+    go []
   | Var _ -> failwith "TODO"
 ;;
 
