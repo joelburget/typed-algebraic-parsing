@@ -1,3 +1,6 @@
 (library
  (name typed_algebraic_parsing)
- (libraries base))
+ (libraries base fmt)
+ (inline_tests)
+ (preprocess
+  (pps ppx_jane)))

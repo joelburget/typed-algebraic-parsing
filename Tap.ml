@@ -17,6 +17,20 @@ module Type = struct
     ; guarded : bool
     }
 
+  let pp_set ppf set = Fmt.(braces (list ~sep:comma char) ppf (Set.to_list set))
+
+  let pp ppf { first; flast; null; guarded } =
+    Fmt.pf
+      ppf
+      "{ first = %a; flast = %a; null = %b; guarded = %b }"
+      pp_set
+      first
+      pp_set
+      flast
+      null
+      guarded
+  ;;
+
   let ( = ) t1 t2 =
     Set.equal t1.first t2.first
     && Set.equal t1.flast t2.flast
@@ -51,14 +65,7 @@ module Type = struct
     }
   ;;
 
-  let star t =
-    { first = t.first
-    ; flast = Set.union t.flast t.first
-    ; null = true
-    ; guarded = t.guarded
-    }
-  ;;
-
+  let star t = { (seq t t) with null = true; flast = Set.union t.flast t.first }
   let min = { first = empty; flast = empty; null = false; guarded = false }
 
   let fix f =
@@ -78,7 +85,12 @@ module Parse = struct
   let chr c s =
     match Stream.peek s with
     | None -> error "Unexpected end of stream"
-    | Some c' -> if Char.(c' = c) then c else error "Unexpected char"
+    | Some c' ->
+      if Char.(c' = c)
+      then (
+        Stream.junk s;
+        c)
+      else error "Unexpected char"
   ;;
 
   let bot _ = error "bottom"
@@ -118,23 +130,6 @@ module Var = struct
     | S : ('rest, 'a) t -> ('b * 'rest, 'a) t
 end
 
-module Grammar = struct
-  type ('ctx, 'a, 'd) t' =
-    | Eps : ('ctx, unit, 'd) t'
-    | Seq : ('ctx, 'a, 'd) t * ('ctx, 'b, 'd) t -> ('ctx, 'a * 'b, 'd) t'
-    | Chr : char -> ('ctx, char, 'd) t'
-    | Bot : ('ctx, 'a, 'd) t'
-    | Alt : ('ctx, 'a, 'd) t * ('ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
-    | Map : ('a -> 'b) * ('ctx, 'a, 'd) t -> ('ctx, 'b, 'd) t'
-    | Fix : ('a * 'ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
-    | Star : ('ctx, 'a, 'd) t -> ('ctx, 'a list, 'd) t'
-    | Var : ('ctx, 'a) Var.t -> ('ctx, 'a, 'd) t'
-
-  and ('ctx, 'a, 'd) t = 'd * ('ctx, 'a, 'd) t'
-
-  let data (d, _) = d
-end
-
 module Env (T : sig
   type 'a t
 end) =
@@ -165,24 +160,54 @@ end)
 type 'a type_env = 'a Type_env.t
 type 'a parse_env = 'a Parse_env.t
 
-let rec typeof : type ctx a d. ctx Type_env.t -> (ctx, a, d) Grammar.t -> Type.t =
- fun env (_, g) ->
-  match g with
-  | Eps -> Type.eps
-  | Seq (g1, g2) ->
-    let env' = Type_env.map { f = (fun ty -> { ty with guarded = true }) } env in
-    Type.seq (typeof env g1) (typeof env' g2)
-  | Chr c -> Type.chr c
-  | Bot -> Type.bot
-  | Alt (g1, g2) -> Type.alt (typeof env g1) (typeof env g2)
-  | Map (_, g) -> typeof env g (* TODO: is this right? *)
-  | Fix g ->
-    let ty = Type.fix (fun ty -> typeof (ty :: env) g) in
-    Type.check ty.Type.guarded "fix must be guarded";
-    typeof (ty :: env) g
-  | Star g -> Type.star (typeof env g)
-  | Var v -> Type_env.lookup env v
-;;
+module Grammar = struct
+  type ('ctx, 'a, 'd) t' =
+    | Eps : ('ctx, unit, 'd) t'
+    | Seq : ('ctx, 'a, 'd) t * ('ctx, 'b, 'd) t -> ('ctx, 'a * 'b, 'd) t'
+    | Chr : char -> ('ctx, char, 'd) t'
+    | Bot : ('ctx, 'a, 'd) t'
+    | Alt : ('ctx, 'a, 'd) t * ('ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
+    | Map : ('a -> 'b) * ('ctx, 'a, 'd) t -> ('ctx, 'b, 'd) t'
+    | Fix : ('a * 'ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
+    | Star : ('ctx, 'a, 'd) t -> ('ctx, 'a list, 'd) t'
+    | Var : ('ctx, 'a) Var.t -> ('ctx, 'a, 'd) t'
+
+  and ('ctx, 'a, 'd) t = 'd * ('ctx, 'a, 'd) t'
+
+  let data (d, _) = d
+
+  let rec typeof : type ctx a d. ctx Type_env.t -> (ctx, a, d) t -> (ctx, a, Type.t) t =
+   fun env (_, g) ->
+    let data = data in
+    match g with
+    | Eps -> Type.eps, Eps
+    | Seq (g1, g2) ->
+      let env' = Type_env.map { f = (fun ty -> { ty with guarded = true }) } env in
+      let g1 = typeof env g1 in
+      let g2 = typeof env' g2 in
+      Type.seq (data g1) (data g2), Seq (g1, g2)
+    | Chr c -> Type.chr c, Chr c
+    | Bot -> Type.bot, Bot
+    | Alt (g1, g2) ->
+      let g1 = typeof env g1 in
+      let g2 = typeof env g2 in
+      Type.alt (data g1) (data g2), Alt (g1, g2)
+    | Map (f, g) ->
+      let g (* TODO: is this right? *) = typeof env g in
+      data g, Map (f, g)
+    | Fix g ->
+      let ty = Type.fix (fun ty -> data (typeof (ty :: env) g)) in
+      Type.check ty.Type.guarded "fix must be guarded";
+      let g = typeof (ty :: env) g in
+      data g, Fix g
+    | Star g ->
+      let g = typeof env g in
+      Type.star (data g), Star g
+    | Var v -> Type_env.lookup env v, Var v
+ ;;
+end
+
+let typeof env gram = Grammar.typeof env gram |> fst
 
 let rec parse : type ctx a. (ctx, a, Type.t) Grammar.t -> ctx Parse_env.t -> a parser =
  fun (_, g) env ->
@@ -292,6 +317,8 @@ module Hoas = struct
         | Sym
         | Seq of sexp list
 
+      (* let pp ppf = function *)
+
       let paren p = lparen ++ p ++ rparen ==> fun ((_, x), _) -> x
 
       let sexp =
@@ -321,7 +348,13 @@ module Hoas = struct
     ;;
 
     module Arith = struct
-      let num = failwith "TODO"
+      let digits = star (charset "0123456789")
+
+      let num : float t =
+        digits ++ chr '.' ++ digits
+        ==> fun ((digits1, _), digits2) ->
+        Float.of_string (String.of_char_list digits1 ^ "." ^ String.of_char_list digits2)
+      ;;
 
       let arith =
         fix (fun arith ->
@@ -335,3 +368,122 @@ module Hoas = struct
     end
   end
 end
+
+let%test_module _ =
+  (module struct
+    open Hoas
+    open Library
+
+    let mk_gram p = p.tdb []
+    let typeof' p = typeof [] (mk_gram p)
+    let go ty = Fmt.pr "%a@." Type.pp (typeof' ty)
+
+    let%expect_test "typechecking" =
+      go eps;
+      go (chr 'a');
+      go bot;
+      go upper;
+      [%expect
+        {|
+        { first = {}; flast = {}; null = true; guarded = true }
+        { first = {a}; flast = {}; null = false; guarded = true }
+        { first = {}; flast = {}; null = false; guarded = true }
+        { first = {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V,
+                   W, X, Y, Z}; flast = {}; null = false; guarded = true } |}]
+    ;;
+
+    let typecheck : type a. a Hoas.t -> (unit, a, Type.t) Grammar.t =
+     fun { tdb } -> Grammar.typeof [] (tdb [])
+   ;;
+
+    let parse p = parse (typecheck p) []
+
+    let go p pp str =
+      try Fmt.pr "@[%a@]@." pp (parse p (Stream.of_string str)) with
+      | _ -> Fmt.pr "failed parse@."
+    ;;
+
+    let%expect_test "chr" =
+      go (chr 'c') Fmt.char "c";
+      go (chr 'c') Fmt.char "d";
+      [%expect {|
+        c
+        failed parse |}]
+    ;;
+
+    let%expect_test "eps" =
+      go eps (Fmt.any "()") "";
+      go eps (Fmt.any "()") "c";
+      [%expect {|
+        ()
+        () |}]
+    ;;
+
+    let%expect_test "bot" =
+      go bot (Fmt.any "()") "c";
+      [%expect {| failed parse |}]
+    ;;
+
+    let%expect_test "seq" =
+      go (seq (chr 'a') (chr 'b')) Fmt.(pair ~sep:comma char char) "ab";
+      [%expect {| a, b |}]
+    ;;
+
+    let%expect_test "alt" =
+      go (alt (chr 'a') (chr 'b')) Fmt.char "a";
+      go (alt (chr 'a') (chr 'b')) Fmt.char "b";
+      go (alt (chr 'a') (chr 'b')) Fmt.char "c";
+      [%expect {|
+        a
+        b
+        failed parse |}]
+    ;;
+
+    let%expect_test "star, plus, map" =
+      go (star (chr 'a')) Fmt.(list char) "";
+      go (star (chr 'a')) Fmt.(list char) "aaa";
+      go (plus (chr 'a')) Fmt.(list char) "";
+      go (plus (chr 'a')) Fmt.(list char) "aaa";
+      go (map (List.map ~f:Char.uppercase) (plus (chr 'a'))) Fmt.(list char) "aaa";
+      [%expect {|
+
+        aaa
+        failed parse
+        aaa
+        AAA |}]
+    ;;
+
+    let%expect_test "any, option" =
+      let go' = go (any [ chr 'a'; chr 'b' ]) Fmt.char in
+      go' "a";
+      go' "a";
+      let go' = go (option (chr 'a')) Fmt.(option char) in
+      go' "a";
+      go' "";
+      [%expect {|
+        a
+        a
+        a |}]
+    ;;
+
+    let%expect_test "charset, upper, lower" =
+      let go' = go (charset "ab") Fmt.char in
+      go' "a";
+      go' "c";
+      let go' = go upper Fmt.char in
+      go' "a";
+      go' "A";
+      let go' = go lower Fmt.char in
+      go' "a";
+      go' "A";
+      [%expect
+        {|
+        a
+        failed parse
+        failed parse
+        A
+        a
+        failed parse |}]
+    ;;
+  end)
+;;
