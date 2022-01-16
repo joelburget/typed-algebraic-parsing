@@ -11,6 +11,7 @@ module Type : sig
   val alt : t -> t -> t
   val seq : t -> t -> t
   val star : t -> t
+  val fix : (t -> t) -> t
 end
 
 module Parse : sig
@@ -22,24 +23,35 @@ module Parse : sig
   val map : ('a -> 'b) -> 'a parser -> 'b parser
 end
 
+module Var : sig
+  type ('ctx, 'a) t =
+    | Z : ('a * 'ctx, 'a) t
+    | S : ('rest, 'a) t -> ('b * 'rest, 'a) t
+end
+
 module Grammar : sig
   type ('ctx, 't) t
 end
 
-module Type_env : sig
+module Env (T : sig
+  type 'a t
+end) : sig
   type 'ctx t =
     | Empty : unit t
-    | Nonempty : 'ctx t -> ('a * 'ctx) t
+    | Nonempty : 'a T.t * 'ctx t -> ('a * 'ctx) t
+
+  val lookup : 'ctx t -> ('ctx, 'a) Var.t -> 'a T.t
+
+  type fn = { f : 'a. 'a T.t -> 'a T.t }
+
+  val map : fn -> 'ctx t -> 'ctx t
 end
 
-module Env : sig
-  type 'ctx t =
-    | Empty : unit t
-    | Nonempty : 'ctx t -> ('a * 'ctx) t
-end
+type _ type_env
+type _ parse_env
 
-val typeof : 'ctx Type_env.t -> ('ctx, 'a) Grammar.t -> Type.t
-val parse : ('ctx, 'a) Grammar.t -> 'ctx Env.t -> 'a parser
+val typeof : 'ctx type_env -> ('ctx, 'a) Grammar.t -> Type.t
+val parse : ('ctx, 'a) Grammar.t -> 'ctx parse_env -> 'a parser
 
 module Hoas : sig
   type 't t

@@ -17,14 +17,24 @@ module Type = struct
     ; guarded : bool
     }
 
+  let ( = ) t1 t2 =
+    Set.equal t1.first t2.first
+    && Set.equal t1.flast t2.flast
+    && Bool.(t1.null = t2.null && t1.guarded = t2.guarded)
+  ;;
+
+  let check b msg = if b then () else failwith msg
   let empty = Set.empty (module Char)
   let singleton = Set.singleton (module Char)
   let ( ==> ) b cs = if b then cs else empty
   let bot = { first = empty; flast = empty; null = false; guarded = true }
   let eps = { first = empty; flast = empty; null = true; guarded = true }
   let chr c = { first = singleton c; flast = empty; null = false; guarded = true }
+  let separable t1 t2 = Set.(is_empty (inter t1.flast t2.first)) && not t1.null
+  let apart t1 t2 = Set.(is_empty (inter t1.first t2.first)) && not (t1.null && t2.null)
 
   let alt t1 t2 =
+    check (apart t1 t2) "alt must be apart";
     { first = Set.union t1.first t2.first
     ; flast = Set.union t1.flast t2.flast
     ; null = t1.null || t2.null
@@ -32,9 +42,8 @@ module Type = struct
     }
   ;;
 
-  (* Assumes t1 not null *)
-  (* TODO: check *)
   let seq t1 t2 =
+    check (separable t1 t2) "seq must be separable";
     { first = t1.first
     ; flast = Set.union t2.flast (t2.null ==> Set.union t2.first t1.flast)
     ; null = false
@@ -48,6 +57,16 @@ module Type = struct
     ; null = true
     ; guarded = t.guarded
     }
+  ;;
+
+  let min = { first = empty; flast = empty; null = false; guarded = false }
+
+  let fix f =
+    let rec loop tp =
+      let tp' = f tp in
+      if tp = tp' then tp else loop tp'
+    in
+    loop min
   ;;
 end
 
@@ -99,18 +118,6 @@ module Var = struct
     | S : ('rest, 'a) t -> ('b * 'rest, 'a) t
 end
 
-module Type_env = struct
-  type 'ctx t =
-    | Empty : unit t
-    | Nonempty : 'ctx t -> ('a * 'ctx) t
-end
-
-module Env = struct
-  type 'ctx t =
-    | Empty : unit t
-    | Nonempty : 'ctx t -> ('a * 'ctx) t
-end
-
 module Grammar = struct
   type ('ctx, 'a) t =
     | Eps : ('ctx, unit) t
@@ -124,19 +131,60 @@ module Grammar = struct
   (* TODO: star? *)
 end
 
-let typeof : type ctx a. ctx Type_env.t -> (ctx, a) Grammar.t -> Type.t =
- fun _env -> function
+module Env (T : sig
+  type 'a t
+end) =
+struct
+  type 'ctx t =
+    | Empty : unit t
+    | Nonempty : 'a T.t * 'ctx t -> ('a * 'ctx) t
+
+  let rec lookup : type ctx a. ctx t -> (ctx, a) Var.t -> a T.t =
+   fun ctx v ->
+    match ctx, v with
+    | Nonempty (x, _), Z -> x
+    | Nonempty (_, xs), S v -> lookup xs v
+    | _ -> .
+ ;;
+
+  type fn = { f : 'a. 'a T.t -> 'a T.t }
+
+  let rec map : type ctx. fn -> ctx t -> ctx t =
+   fun { f } -> function
+    | Empty -> Empty
+    | Nonempty (x, xs) -> Nonempty (f x, map { f } xs)
+ ;;
+end
+
+module Type_env = Env (struct
+  type _ t = Type.t
+end)
+
+module Parse_env = Env (struct
+  type 'a t = char Stream.t -> 'a
+end)
+
+type 'a type_env = 'a Type_env.t
+type 'a parse_env = 'a Parse_env.t
+
+let rec typeof : type ctx a. ctx Type_env.t -> (ctx, a) Grammar.t -> Type.t =
+ fun env -> function
   | Eps -> Type.eps
-  | Seq (_g1, _g2) -> failwith "TODO"
+  | Seq (g1, g2) ->
+    let env' = Type_env.map { f = (fun ty -> { ty with guarded = true }) } env in
+    Type.seq (typeof env g1) (typeof env' g2)
   | Chr c -> Type.chr c
   | Bot -> Type.bot
-  | Alt _ -> failwith "TODO"
-  | Map _ -> failwith "TODO"
-  | Fix _ -> failwith "TODO"
-  | Var _ -> failwith "TODO"
+  | Alt (g1, g2) -> Type.alt (typeof env g1) (typeof env g2)
+  | Map (_, g) -> typeof env g (* TODO: is this right? *)
+  | Fix g ->
+    let ty = Type.fix (fun ty -> typeof (Nonempty (ty, env)) g) in
+    Type.check ty.Type.guarded "fix must be guarded";
+    typeof (Nonempty (ty, env)) g
+  | Var v -> Type_env.lookup env v
 ;;
 
-let rec parse : type ctx a. (ctx, a) Grammar.t -> ctx Env.t -> a parser =
+let rec parse : type ctx a. (ctx, a) Grammar.t -> ctx Parse_env.t -> a parser =
  fun g env ->
   let open Parse in
   match g with
@@ -154,13 +202,17 @@ let rec parse : type ctx a. (ctx, a) Grammar.t -> ctx Env.t -> a parser =
 ;;
 
 module Hoas = struct
-  type 'a t = { tdb : 'ctx. 'ctx Env.t -> ('ctx, 'a) Grammar.t }
+  module Ctx = Env (struct
+    type _ t = unit
+  end)
 
-  let rec len : type n. n Env.t -> int =
-   fun ctx -> match ctx with Empty -> 0 | Nonempty ctx -> 1 + len ctx
+  type 'a t = { tdb : 'ctx. 'ctx Ctx.t -> ('ctx, 'a) Grammar.t }
+
+  let rec len : type n. n Ctx.t -> int =
+   fun ctx -> match ctx with Empty -> 0 | Nonempty (_, ctx) -> 1 + len ctx
  ;;
 
-  let rec tshift' : type a i j. int -> j Env.t -> (a * i) Env.t -> (j, a) Var.t =
+  let rec tshift' : type a i j. int -> j Ctx.t -> (a * i) Ctx.t -> (j, a) Var.t =
    fun n c1 c2 ->
     match n, c1, c2 with
     (* Both the 'assert false' and the 'Obj.magic' are safe here,
@@ -170,10 +222,10 @@ module Hoas = struct
      *)
     | _, Empty, _ -> assert false
     | 0, Nonempty _, Nonempty _ -> Stdlib.Obj.magic Var.Z
-    | n, Nonempty c1, c2 -> Var.S (tshift' (n - 1) c1 c2)
+    | n, Nonempty ((), c1), c2 -> Var.S (tshift' (n - 1) c1 c2)
  ;;
 
-  let tshift : type a i j. j Env.t -> (a * i) Env.t -> (j, a) Var.t =
+  let tshift : type a i j. j Ctx.t -> (a * i) Ctx.t -> (j, a) Var.t =
    fun c1 c2 -> tshift' (len c1 - len c2) c1 c2
  ;;
 
@@ -188,7 +240,9 @@ module Hoas = struct
    fun f ->
     { tdb =
         (fun i ->
-          Fix ((f { tdb = (fun j -> Var (tshift j (Nonempty i))) }).tdb (Nonempty i)))
+          Fix
+            ((f { tdb = (fun j -> Var (tshift j (Nonempty ((), i)))) }).tdb
+               (Nonempty ((), i))))
     }
  ;;
 
