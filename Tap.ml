@@ -204,7 +204,6 @@ let rec parse : type ctx a. (ctx, a, Type.t) Grammar.t -> ctx Parse_env.t -> a p
   | Bot -> bot
   | Alt (g1, g2) -> alt (data g1) (parse g1 env) (data g2) (parse g2 env)
   | Map (f, g) -> parse g env |> map f
-  | Fix _ -> failwith "TODO"
   | Star g ->
     let p = parse g env in
     let first_set = (data g).Type.first in
@@ -214,7 +213,13 @@ let rec parse : type ctx a. (ctx, a, Type.t) Grammar.t -> ctx Parse_env.t -> a p
       | Some c -> if Set.mem first_set c then go (p s :: ret) s else List.rev ret
     in
     go []
-  | Var _ -> failwith "TODO"
+  | Fix g ->
+    let r = ref (fun _ -> assert false) in
+    let p s = !r s in
+    let q = parse g (Nonempty (p, env)) in
+    r := q;
+    p
+  | Var n -> Parse_env.lookup env n
 ;;
 
 module Hoas = struct
