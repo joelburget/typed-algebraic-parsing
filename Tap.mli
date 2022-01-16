@@ -79,22 +79,15 @@ module Hoas : sig
     val infixr : ('a -> 'a -> 'a) t -> 'a t -> 'a t
     val infixl : ('a -> 'a -> 'a) t -> 'a t -> 'a t
     val infix : (assoc * ('a -> 'a -> 'a) t) list -> 'a t -> 'a t
+    val sep_by : 'a t -> 'b t -> 'b list t
+    val sep_by1 : 'a t -> 'b t -> 'b list t
 
     module Sexp : sig
-      type token =
-        | SYMBOL of string
-        | LPAREN
-        | RPAREN
-
-      val symbol : token t
-      val lparen : token t
-      val rparen : token t
-      val token : token t
-
       type sexp =
-        | Sym
+        | Sym of string
         | Seq of sexp list
 
+      val pp : sexp Fmt.t
       val paren : 'a t -> 'a t
       val sexp : sexp t
     end

@@ -300,30 +300,29 @@ module Hoas = struct
     let charset s = any (List.map ~f:chr (String.to_list s))
     let lower = charset "abcdefghijklmnopqrstuvwxyz"
     let upper = charset "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    let word = upper ++ star lower ==> fun (c, cs) -> String.of_char_list (c :: cs)
+    let sep_by1 sep p = p ++ star (sep ++ p ==> snd) ==> fun (x, xs) -> x :: xs
+    let sep_by sep p = option (sep_by1 sep p) ==> function None -> [] | Some xs -> xs
 
     module Sexp = struct
-      type token =
-        | SYMBOL of string
-        | LPAREN
-        | RPAREN
-
-      let symbol = word ==> fun s -> SYMBOL s
-      let lparen = chr '(' ==> always LPAREN
-      let rparen = chr '(' ==> always RPAREN
-      let token = any [ symbol; lparen; rparen ]
-
       type sexp =
-        | Sym
+        | Sym of string
         | Seq of sexp list
 
-      (* let pp ppf = function *)
+      let rec pp ppf =
+        let open Fmt in
+        function
+        | Sym str -> string ppf str | Seq sexps -> parens (list pp ~sep:sp) ppf sexps
+      ;;
 
-      let paren p = lparen ++ p ++ rparen ==> fun ((_, x), _) -> x
+      let paren p = chr '(' ++ p ++ chr ')' ==> fun ((_, x), _) -> x
+      let word = plus lower ==> String.of_char_list
 
       let sexp =
         fix (fun sexp ->
-            any [ symbol ==> always Sym; (paren (star sexp) ==> fun s -> Seq s) ])
+            any
+              [ (word ==> fun sym -> Sym sym)
+              ; (paren (sep_by (chr ' ') sexp) ==> fun s -> Seq s)
+              ])
       ;;
     end
 
@@ -484,6 +483,17 @@ let%test_module _ =
         A
         a
         failed parse |}]
+    ;;
+
+    let%expect_test "sexp" =
+      let go' = go Sexp.sexp Sexp.pp in
+      go' "()";
+      go' "foo";
+      go' "(foo bar)";
+      [%expect {|
+        ()
+        foo
+        (foo bar) |}]
     ;;
   end)
 ;;
