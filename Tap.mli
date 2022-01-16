@@ -63,6 +63,7 @@ module Hoas : sig
   val alt : 'a t -> 'a t -> 'a t
   val map : ('a -> 'b) -> 'a t -> 'b t
   val fix : ('b t -> 'b t) -> 'b t
+  val star : 'a t -> 'a list t
 
   module Library : sig
     type assoc =
@@ -71,7 +72,6 @@ module Hoas : sig
 
     val any : 'a t list -> 'a t
     val option : 'a t -> 'a option t
-    val star : 'a t -> 'a list t
     val plus : 'a t -> 'a list t
     val charset : string -> char t
     val lower : char t

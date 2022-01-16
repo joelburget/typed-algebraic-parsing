@@ -259,6 +259,8 @@ module Hoas = struct
     }
  ;;
 
+  let star g = { tdb = (fun p -> (), Star (g.tdb p)) }
+
   module Library = struct
     type assoc =
       | Left
@@ -269,11 +271,6 @@ module Hoas = struct
     let ( ==> ) p f = map f p
     let any gs = List.fold_left ~f:alt ~init:bot gs
     let option r = any [ eps ==> always None; (r ==> fun x -> Some x) ]
-
-    let star g =
-      fix (fun rest -> any [ eps ==> always []; (g ++ rest ==> fun (x, xs) -> x :: xs) ])
-    ;;
-
     let plus g = g ++ star g ==> fun (x, xs) -> x :: xs
     let charset s = any (List.map ~f:chr (String.to_list s))
     let lower = charset "abcdefghijklmnopqrstuvwxyz"
