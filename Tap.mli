@@ -100,9 +100,3 @@ module Hoas : sig
     end
   end
 end
-
-(*
-  exception Type_error of string
-
-  val parser : 'a t -> char Stream.t -> 'a
-     *)
