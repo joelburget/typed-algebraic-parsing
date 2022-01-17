@@ -376,32 +376,33 @@ module Regex = struct
   type t =
     | Empty
     | Eps
-    | Char of char
+    | Char_set of CSet.t
     | Seq of t * t
     | Alt of t * t
     | Star of t
     | And of t * t
     | Complement of t
 
-  let chr c = Char c
+  let chr c = Char_set (CSet.csingle c)
   let ( >>> ) t1 t2 = Seq (t1, t2)
   let star t = Star t
 
   (* Eps if the language defined contains the empty string, Empty otherwise *)
-  let rec nullability = function
-    | Eps | Star _ -> Eps
-    | Empty | Char _ -> Empty
-    | Seq (r, s) | And (r, s) -> And (nullability r, nullability s)
-    | Alt (r, s) -> Alt (nullability r, nullability s)
-    | Complement r ->
-      (match nullability r with Empty -> Eps | Eps -> Empty | _ -> assert false)
+  let rec nullable = function
+    | Eps | Star _ -> true
+    | Empty | Char_set _ -> false
+    | Seq (r, s) | And (r, s) -> List.for_all ~f:nullable [ r; s ]
+    | Alt (r, s) -> List.exists ~f:nullable [ r; s ]
+    | Complement r -> not (nullable r)
   ;;
+
+  let nullability re = if nullable re then Eps else Empty
 
   let rec delta c =
     let d = delta c in
     function
     | Empty | Eps -> Empty
-    | Char c' -> if Char.(c = c') then Eps else Empty
+    | Char_set set -> if CSet.mem (Stdlib.Char.code c) set then Eps else Empty
     | Seq (r, s) -> Alt (Seq (d r, s), Seq (nullability r, d s))
     | Alt (r, s) -> Alt (d r, d s)
     | Star r -> Seq (d r, Star r)
