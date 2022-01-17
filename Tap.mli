@@ -100,3 +100,13 @@ module Hoas : sig
     end
   end
 end
+
+(** Regular-expression derivatives reexamined *)
+module Regex : sig
+  type t
+
+  val chr : char -> t
+  val ( >>> ) : t -> t -> t
+  val star : t -> t
+  val delta : char -> t -> t
+end

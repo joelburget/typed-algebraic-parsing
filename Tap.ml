@@ -372,6 +372,58 @@ module Hoas = struct
   end
 end
 
+module Regex = struct
+  type t =
+    | Empty
+    | Eps
+    | Char of char
+    | Seq of t * t
+    | Alt of t * t
+    | Star of t
+    | And of t * t
+    | Complement of t
+
+  let chr c = Char c
+  let ( >>> ) t1 t2 = Seq (t1, t2)
+  let star t = Star t
+
+  (* Eps if the language defined contains the empty string, Empty otherwise *)
+  let rec nullability = function
+    | Eps | Star _ -> Eps
+    | Empty | Char _ -> Empty
+    | Seq (r, s) | And (r, s) -> And (nullability r, nullability s)
+    | Alt (r, s) -> Alt (nullability r, nullability s)
+    | Complement r ->
+      (match nullability r with Empty -> Eps | Eps -> Empty | _ -> assert false)
+  ;;
+
+  let rec delta c =
+    let d = delta c in
+    function
+    | Empty | Eps -> Empty
+    | Char c' -> if Char.(c = c') then Eps else Empty
+    | Seq (r, s) -> Alt (Seq (d r, s), Seq (nullability r, d s))
+    | Alt (r, s) -> Alt (d r, d s)
+    | Star r -> Seq (d r, Star r)
+    | And (r, s) -> And (d r, d s)
+    | Complement r -> Complement (d r)
+  ;;
+
+  let rec string_delta str =
+    let len = String.length str in
+    let rec loop i re =
+      if Int.(i >= len) then re else loop (i + 1) (delta (String.unsafe_get str i) re)
+    in
+    loop 0
+  ;;
+
+  module Vector = struct
+    type nonrec t = t list
+
+    let delta c = List.map ~f:(delta c)
+  end
+end
+
 let%test_module _ =
   (module struct
     open Hoas
