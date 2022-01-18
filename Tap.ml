@@ -377,40 +377,150 @@ module Regex = struct
     | Empty
     | Eps
     | Char_set of CSet.t
-    | Seq of t * t
-    | Alt of t * t
+    | Seq of t list
+    | Alt of t list
     | Star of t
-    | And of t * t
+    | And of t list
     | Complement of t
+  [@@deriving compare, equal]
+
+  (* No Xor = 1 *)
+  let rec prec = function
+    | Empty | Eps | Char_set _ | Seq [] | Alt [] | And [] -> 6
+    | Seq _ -> 3
+    | Star _ -> 5
+    | Alt [ re ] | And [ re ] -> prec re
+    | Alt _ -> 0
+    | And _ -> 2
+    | Complement _ -> 4
+  ;;
+
+  let rec pp ppf re =
+    let open Fmt in
+    match re with
+    | Empty -> pf ppf "{empty}"
+    | Eps -> pf ppf "{eps}"
+    | Char_set cset -> CSet.pp ppf cset
+    | Seq [] -> ()
+    | Seq [ re ] -> pp ppf re
+    | Seq res -> list pp ppf res
+    | Star re' -> pp' (prec re) ppf re'
+    | Alt [] | And [] -> pf ppf "{}"
+    | Alt [ re ] | And [ re ] -> pp ppf re
+    | Alt res -> list ~sep:(any "|@,") (pp' (prec re)) ppf res
+    | And res -> list ~sep:(any "&@,") (pp' (prec re)) ppf res
+    | Complement re -> pf ppf "!%a" pp re
+
+  and pp' prec' ppf re = if prec' > prec re then Fmt.parens pp ppf re else pp ppf re
+
+  let ( >>> ) t1 t2 =
+    match t1, t2 with
+    | Eps, re | re, Eps -> re
+    | Empty, _ | _, Empty -> Empty
+    | Seq rs1, Seq rs2 -> Seq (rs1 @ rs2)
+    | Seq rs, r -> Seq (rs @ [ r ])
+    | r, Seq rs -> Seq (r :: rs)
+    | _ -> Seq [ t1; t2 ]
+  ;;
 
   let chr c = Char_set (CSet.csingle c)
-  let ( >>> ) t1 t2 = Seq (t1, t2)
-  let star t = Star t
+
+  let str s =
+    s |> String.to_list |> List.map ~f:chr |> List.fold_right ~init:Eps ~f:( >>> )
+  ;;
+
+  let star = function Eps -> Eps | Empty -> Eps | Star _ as re -> re | re -> Star re
+  let char_set _ = failwith "TODO"
+
+  let merge_csets in_res merge_op =
+    let charsets, res =
+      List.partition_map in_res ~f:(function
+          | Char_set cset -> Either.First cset
+          | re -> Second re)
+    in
+    match charsets with
+    | [] | [ _ ] -> in_res
+    | cset :: csets ->
+      let merged_cset = List.fold_left ~f:merge_op ~init:cset csets in
+      List.merge ~compare [ Char_set merged_cset ] res
+  ;;
+
+  let merge_with ctor re1 re2 =
+    match compare re1 re2 with
+    | x when x < 0 -> ctor re1 re2
+    | 0 -> re1
+    | _ -> ctor re2 re1
+  ;;
+
+  let merge_alts a b =
+    match merge_csets (List.merge ~compare a b) CSet.union with
+    | [] -> Empty
+    | [ re ] -> re
+    | res -> Alt res
+  ;;
+
+  let ( || ) re1 re2 =
+    match re1, re2 with
+    | Empty, re | re, Empty -> re
+    | Char_set s1, Char_set s2 -> char_set (CSet.union s1 s2)
+    | Alt res1, Alt res2 -> merge_alts res1 res2
+    | Alt res1, _ -> merge_alts res1 [ re2 ]
+    | _, Alt res2 -> merge_alts [ re1 ] res2
+    | _ -> merge_with (fun x y -> Alt [ x; y ]) re1 re2
+  ;;
+
+  let merge_ands a b =
+    match merge_csets (List.merge ~compare a b) CSet.inter with
+    | [] -> Empty
+    | [ re ] -> re
+    | res -> And res
+  ;;
+
+  let ( && ) re1 re2 =
+    match re1, re2 with
+    | Empty, _ | _, Empty -> Empty
+    | Char_set s1, Char_set s2 -> char_set (CSet.inter s1 s2)
+    | And res1, And res2 -> merge_ands res1 res2
+    | And res1, _ -> merge_ands res1 [ re2 ]
+    | re1, And res2 -> merge_ands [ re1 ] res2
+    | _ -> merge_with (fun x y -> And [ x; y ]) re1 re2
+  ;;
+
+  let any = Char_set CSet.cany
+
+  let complement = function
+    | Complement re -> re
+    | Empty -> star any
+    | re -> Complement re
+  ;;
 
   (* Eps if the language defined contains the empty string, Empty otherwise *)
   let rec nullable = function
     | Eps | Star _ -> true
     | Empty | Char_set _ -> false
-    | Seq (r, s) | And (r, s) -> List.for_all ~f:nullable [ r; s ]
-    | Alt (r, s) -> List.exists ~f:nullable [ r; s ]
+    | Seq rs | And rs -> List.for_all ~f:nullable rs
+    | Alt rs -> List.exists ~f:nullable rs
     | Complement r -> not (nullable r)
   ;;
 
   let nullability re = if nullable re then Eps else Empty
 
-  let rec delta c =
-    let d = delta c in
-    function
+  let rec delta c = function
     | Empty | Eps -> Empty
-    | Char_set set -> if CSet.mem (Stdlib.Char.code c) set then Eps else Empty
-    | Seq (r, s) -> Alt (Seq (d r, s), Seq (nullability r, d s))
-    | Alt (r, s) -> Alt (d r, d s)
-    | Star r -> Seq (d r, Star r)
-    | And (r, s) -> And (d r, d s)
-    | Complement r -> Complement (d r)
+    | Char_set set -> if CSet.mem c set then Eps else Empty
+    | Seq [] -> Empty
+    | Alt [] | And [] -> failwith "error"
+    | Seq [ re ] | Alt [ re ] | And [ re ] -> delta c re
+    | Seq (re :: res) ->
+      let mk_concat_list = List.fold_right ~init:Eps ~f:( >>> ) in
+      mk_concat_list (delta c re :: res) || nullability re >>> delta c (Seq res)
+    | Star r' as r -> delta c r' >>> r
+    | Alt (re :: res) -> delta c re || delta c (Alt res)
+    | And (re :: res) -> delta c re && delta c (And res)
+    | Complement r -> Complement (delta c r)
   ;;
 
-  let rec string_delta str =
+  let string_delta str =
     let len = String.length str in
     let rec loop i re =
       if Int.(i >= len) then re else loop (i + 1) (delta (String.unsafe_get str i) re)
@@ -418,11 +528,65 @@ module Regex = struct
     loop 0
   ;;
 
+  (*
   module Vector = struct
     type nonrec t = t list
 
     let delta c = List.map ~f:(delta c)
   end
+  *)
+
+  let%test_module _ =
+    (module struct
+      let pp = Fmt.pr "@[%a@]@." pp
+
+      let%expect_test "pp" =
+        pp Empty;
+        pp Eps;
+        pp (Char_set CSet.empty);
+        pp (Alt []);
+        pp (Alt [ chr 'c' ]);
+        pp (Alt [ chr 'c'; chr 'd' ]);
+        pp (And []);
+        pp (And [ chr 'c' ]);
+        pp (And [ chr 'c'; chr 'd' ]);
+        pp (complement (chr 'c'));
+        pp (complement (complement (chr 'c')));
+        [%expect
+          {|
+          {empty}
+          {eps}
+          []
+          {}
+          ['c']
+          ['c']|['d']
+          {}
+          ['c']
+          ['c']&['d']
+          !['c']
+          ['c'] |}]
+      ;;
+
+      let%expect_test "delta" =
+        let go c re = delta c re |> pp in
+        go 'c' (chr 'c');
+        pp (chr 'd' || Empty >>> Empty);
+        go 'c' (str "cd");
+        go 'c' (str "dc");
+        [%expect {|
+          {eps}
+          ['d']
+          ['d']
+          {empty} |}]
+      ;;
+
+      let%expect_test "string_delta" =
+        let go str re = string_delta str re |> pp in
+        go "ab" (str "abc");
+        [%expect {| ['c'] |}]
+      ;;
+    end)
+  ;;
 end
 
 let%test_module _ =

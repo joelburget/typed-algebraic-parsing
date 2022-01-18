@@ -18,32 +18,26 @@
 
 (* Character sets, represented as sorted list of intervals *)
 
-type c = int
 type t
 
-val iter : t -> f:(c -> c -> unit) -> unit
+val compare : t -> t -> int
+val ( = ) : t -> t -> bool
+val equal : t -> t -> bool
+val iter : t -> f:(char -> char -> unit) -> unit
 val union : t -> t -> t
 val inter : t -> t -> t
 val diff : t -> t -> t
-val offset : int -> t -> t
 val empty : t
-val single : c -> t
-val seq : c -> c -> t
-val add : c -> t -> t
-val mem : c -> t -> bool
-
-type hash
-
-val hash : t -> hash
+val single : char -> t
+val seq : char -> char -> t
+val add : char -> t -> t
+val mem : char -> t -> bool
 val pp : Format.formatter -> t -> unit
-val one_char : t -> c option
-val fold_right : t -> init:'acc -> f:(c * c -> 'acc -> 'acc) -> 'acc
-val hash_rec : t -> int
-
-module CSetMap : Map.S with type key = int * t
-
+val one_char : t -> char option
+val fold_right : t -> init:'acc -> f:(char * char -> 'acc -> 'acc) -> 'acc
 val cany : t
 val csingle : char -> t
 val is_empty : t -> bool
+val is_any : t -> bool
 val prepend : t -> 'a list -> (t * 'a list) list -> (t * 'a list) list
-val pick : t -> c
+val pick : t -> char
