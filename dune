@@ -1,6 +1,11 @@
 (library
  (name typed_algebraic_parsing)
- (libraries base fmt)
+ (libraries base diet fmt)
  (inline_tests)
  (preprocess
   (pps ppx_jane)))
+
+(env
+ (dev
+  (flags
+   (:standard -warn-error -A))))

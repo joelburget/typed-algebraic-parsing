@@ -1,15 +1,60 @@
 open Base
 module Stream = Stdlib.Stream
 
-module Char_set = struct
-  type t = (char, Char.comparator_witness) Set.t
-end
-
 type 'a parser = char Stream.t -> 'a
 
 exception Parse_error of string
 
 let error fmt = Stdlib.Format.kasprintf (fun str -> raise (Parse_error str)) fmt
+
+module Char_set = struct
+  let min_char = Char.of_int_exn 0
+  let max_char = Char.of_int_exn 255
+
+  include Diet.Make (struct
+    type t = char
+
+    let compare = Char.compare
+    let zero = min_char
+
+    let succ c =
+      match c |> Char.to_int |> Int.succ |> Char.of_int with None -> c | Some c -> c
+    ;;
+
+    let pred c =
+      match c |> Char.to_int |> Int.pred |> Char.of_int with None -> c | Some c -> c
+    ;;
+
+    let sub a b =
+      let a = Char.to_int a in
+      let b = Char.to_int b in
+      Char.of_int_exn (a - b)
+    ;;
+
+    let add a b =
+      let a = Char.to_int a in
+      let b = Char.to_int b in
+      Char.of_int_exn (a + b)
+    ;;
+
+    let to_string c = Fmt.str "%C" c
+  end)
+
+  let of_interval interval = add interval empty
+  let singleton c = of_interval (Interval.make c c)
+  let any = of_interval (Interval.make min_char max_char)
+
+  let pp ppf char_set =
+    Fmt.pf ppf "@[[";
+    iter
+      (fun interval ->
+        let x = Interval.x interval in
+        let y = Interval.y interval in
+        if Char.(x = y) then Fmt.pf ppf "%c" x else Fmt.pf ppf "%c-%c" x y)
+      char_set;
+    Fmt.pf ppf "]@]"
+  ;;
+end
 
 module Type = struct
   type t =
@@ -19,8 +64,7 @@ module Type = struct
     ; guarded : bool
     }
 
-  let pp_char ppf = Fmt.pf ppf "%C"
-  let pp_set ppf set = Fmt.(braces (list ~sep:comma pp_char) ppf (Set.to_list set))
+  let pp_set ppf set = Char_set.pp ppf set
 
   let pp =
     Fmt.(
@@ -35,25 +79,28 @@ module Type = struct
   ;;
 
   let ( = ) t1 t2 =
-    Set.equal t1.first t2.first
-    && Set.equal t1.flast t2.flast
+    Char_set.equal t1.first t2.first
+    && Char_set.equal t1.flast t2.flast
     && Bool.(t1.null = t2.null && t1.guarded = t2.guarded)
   ;;
 
   let check b msg = if not b then failwith msg
-  let empty = Set.empty (module Char)
-  let singleton = Set.singleton (module Char)
+  let empty = Char_set.empty
+  let singleton = Char_set.singleton
   let ( ==> ) b cs = if b then cs else empty
   let bot = { first = empty; flast = empty; null = false; guarded = true }
   let eps = { first = empty; flast = empty; null = true; guarded = true }
   let chr c = { first = singleton c; flast = empty; null = false; guarded = true }
-  let separable t1 t2 = Set.(is_empty (inter t1.flast t2.first)) && not t1.null
-  let apart t1 t2 = Set.(is_empty (inter t1.first t2.first)) && not (t1.null && t2.null)
+  let separable t1 t2 = Char_set.(is_empty (inter t1.flast t2.first)) && not t1.null
+
+  let apart t1 t2 =
+    Char_set.(is_empty (inter t1.first t2.first)) && not (t1.null && t2.null)
+  ;;
 
   let alt t1 t2 =
     check (apart t1 t2) (Fmt.str "alt must be apart @[(%a@ vs@ %a)@]" pp t1 pp t2);
-    { first = Set.union t1.first t2.first
-    ; flast = Set.union t1.flast t2.flast
+    { first = Char_set.union t1.first t2.first
+    ; flast = Char_set.union t1.flast t2.flast
     ; null = t1.null || t2.null
     ; guarded = t1.guarded && t2.guarded
     }
@@ -62,13 +109,13 @@ module Type = struct
   let seq t1 t2 =
     check (separable t1 t2) (Fmt.str "seq must be separable @[(%a@ vs@ %a)@]" pp t1 pp t2);
     { first = t1.first
-    ; flast = Set.union t2.flast (t2.null ==> Set.union t2.first t1.flast)
+    ; flast = Char_set.union t2.flast (t2.null ==> Char_set.union t2.first t1.flast)
     ; null = false
     ; guarded = t1.guarded
     }
   ;;
 
-  let star t = { (seq t t) with null = true; flast = Set.union t.flast t.first }
+  let star t = { (seq t t) with null = true; flast = Char_set.union t.flast t.first }
   let min = { first = empty; flast = empty; null = false; guarded = false }
 
   let fix f =
@@ -115,9 +162,9 @@ module Parse = struct
       then p2 s
       else error "Unexpected end of stream"
     | Some c ->
-      if Set.mem tp1.first c
+      if Char_set.mem c tp1.first
       then p1 s
-      else if Set.mem tp2.first c
+      else if Char_set.mem c tp2.first
       then p2 s
       else if tp1.null
       then p1 s
@@ -231,7 +278,7 @@ let rec parse : type ctx a. (ctx, a, Type.t) Grammar.t -> ctx Parse_env.t -> a p
     let first_set = (data g).Type.first in
     let rec go ret s =
       match Stream.peek s with
-      | Some c when Set.mem first_set c -> go (p s :: ret) s
+      | Some c when Char_set.mem c first_set -> go (p s :: ret) s
       | _ -> List.rev ret
     in
     go []
@@ -376,7 +423,7 @@ module Regex = struct
   type t =
     | Empty
     | Eps
-    | Char_set of CSet.t
+    | Char_set of Char_set.t
     | Seq of t list
     | Alt of t list
     | Star of t
@@ -400,7 +447,7 @@ module Regex = struct
     match re with
     | Empty -> pf ppf "{empty}"
     | Eps -> pf ppf "{eps}"
-    | Char_set cset -> CSet.pp ppf cset
+    | Char_set cset -> Char_set.pp ppf cset
     | Seq [] -> ()
     | Seq [ re ] -> pp ppf re
     | Seq res -> list pp ppf res
@@ -423,7 +470,7 @@ module Regex = struct
     | _ -> Seq [ t1; t2 ]
   ;;
 
-  let chr c = Char_set (CSet.csingle c)
+  let chr c = Char_set (Char_set.singleton c)
 
   let str s =
     s |> String.to_list |> List.map ~f:chr |> List.fold_right ~init:Eps ~f:( >>> )
@@ -453,7 +500,7 @@ module Regex = struct
   ;;
 
   let merge_alts a b =
-    match merge_csets (List.merge ~compare a b) CSet.union with
+    match merge_csets (List.merge ~compare a b) Char_set.union with
     | [] -> Empty
     | [ re ] -> re
     | res -> Alt res
@@ -462,7 +509,7 @@ module Regex = struct
   let ( || ) re1 re2 =
     match re1, re2 with
     | Empty, re | re, Empty -> re
-    | Char_set s1, Char_set s2 -> char_set (CSet.union s1 s2)
+    | Char_set s1, Char_set s2 -> char_set (Char_set.union s1 s2)
     | Alt res1, Alt res2 -> merge_alts res1 res2
     | Alt res1, _ -> merge_alts res1 [ re2 ]
     | _, Alt res2 -> merge_alts [ re1 ] res2
@@ -470,7 +517,7 @@ module Regex = struct
   ;;
 
   let merge_ands a b =
-    match merge_csets (List.merge ~compare a b) CSet.inter with
+    match merge_csets (List.merge ~compare a b) Char_set.inter with
     | [] -> Empty
     | [ re ] -> re
     | res -> And res
@@ -479,14 +526,14 @@ module Regex = struct
   let ( && ) re1 re2 =
     match re1, re2 with
     | Empty, _ | _, Empty -> Empty
-    | Char_set s1, Char_set s2 -> char_set (CSet.inter s1 s2)
+    | Char_set s1, Char_set s2 -> char_set (Char_set.inter s1 s2)
     | And res1, And res2 -> merge_ands res1 res2
     | And res1, _ -> merge_ands res1 [ re2 ]
     | re1, And res2 -> merge_ands [ re1 ] res2
     | _ -> merge_with (fun x y -> And [ x; y ]) re1 re2
   ;;
 
-  let any = Char_set CSet.cany
+  let any = Char_set Char_set.any
 
   let complement = function
     | Complement re -> re
@@ -507,7 +554,7 @@ module Regex = struct
 
   let rec delta c = function
     | Empty | Eps -> Empty
-    | Char_set set -> if CSet.mem c set then Eps else Empty
+    | Char_set set -> if Char_set.mem c set then Eps else Empty
     | Seq [] -> Empty
     | Alt [] | And [] -> failwith "error"
     | Seq [ re ] | Alt [ re ] | And [ re ] -> delta c re
@@ -529,61 +576,73 @@ module Regex = struct
   ;;
 
   (*
+  let class' = function
+    | Eps -> Set.singleton (module Char_set) Char_set.any
+    | Char_set cs -> Set.of_list (module Char_set) [ cs; Char_set.complement cs ]
+    | _ -> failwith "TODO"
+  ;;
+
+  let mk_dfa re =
+    let q0 = delta Eps re in
+    let _ = explore
+
   module Vector = struct
     type nonrec t = t list
 
     let delta c = List.map ~f:(delta c)
   end
-  *)
+     *)
 
   let%test_module _ =
     (module struct
-      let pp = Fmt.pr "@[%a@]@." pp
+      let pp title = Fmt.pr "@[<hov 2>%S:@ %a@]@." title pp
 
       let%expect_test "pp" =
-        pp Empty;
-        pp Eps;
-        pp (Char_set CSet.empty);
-        pp (Alt []);
-        pp (Alt [ chr 'c' ]);
-        pp (Alt [ chr 'c'; chr 'd' ]);
-        pp (And []);
-        pp (And [ chr 'c' ]);
-        pp (And [ chr 'c'; chr 'd' ]);
-        pp (complement (chr 'c'));
-        pp (complement (complement (chr 'c')));
+        pp "Empty" Empty;
+        pp "Eps" Eps;
+        pp "Char_set Char_set.empty" (Char_set Char_set.empty);
+        pp "Alt []" (Alt []);
+        pp "Alt [ chr 'c' ]" (Alt [ chr 'c' ]);
+        pp "Alt [ chr 'c'; chr 'd' ]" (Alt [ chr 'c'; chr 'd' ]);
+        pp "And []" (And []);
+        pp "And [ chr 'c' ]" (And [ chr 'c' ]);
+        pp "And [ chr 'c'; chr 'd' ]" (And [ chr 'c'; chr 'd' ]);
+        pp "complement (chr 'c')" (complement (chr 'c'));
+        pp "complement (complement (chr 'c'))" (complement (complement (chr 'c')));
         [%expect
           {|
-          {empty}
-          {eps}
-          []
-          {}
-          ['c']
-          ['c']|['d']
-          {}
-          ['c']
-          ['c']&['d']
-          !['c']
-          ['c'] |}]
+          "Empty": {empty}
+          "Eps": {eps}
+          "Char_set Char_set.empty": []
+          "Alt []": {}
+          "Alt [ chr 'c' ]": [c]
+          "Alt [ chr 'c'; chr 'd' ]": [c]|[d]
+          "And []": {}
+          "And [ chr 'c' ]": [c]
+          "And [ chr 'c'; chr 'd' ]": [c]&[d]
+          "complement (chr 'c')": ![c]
+          "complement (complement (chr 'c'))": [c] |}]
       ;;
 
       let%expect_test "delta" =
-        let go c re = delta c re |> pp in
-        go 'c' (chr 'c');
-        pp (chr 'd' || Empty >>> Empty);
-        go 'c' (str "cd");
-        go 'c' (str "dc");
-        [%expect {|
-          {eps}
-          ['d']
-          ['d']
-          {empty} |}]
+        let go title re c = delta c re |> pp title in
+        go "delta 'c' (chr 'c')" (chr 'c') 'c';
+        pp "chr 'd' || Empty >>> Empty" (chr 'd' || Empty >>> Empty);
+        go {|delta 'c' (str "cd")|} (str "cd") 'c';
+        go {|delta 'c' (str "dc")|} (str "dc") 'c';
+        [%expect
+          {|
+          "delta 'c' (chr 'c')": {eps}
+          "chr 'd' || Empty >>> Empty": [d]
+          "delta 'c' (str \"cd\")": [d]
+          "delta 'c' (str \"dc\")": {empty} |}]
       ;;
 
       let%expect_test "string_delta" =
-        let go str re = string_delta str re |> pp in
-        go "ab" (str "abc");
-        [%expect {| ['c'] |}]
+        let go title re str = string_delta str re |> pp title in
+        go {|delta "ab" (str "abc")|} (str "abc") "ab";
+        [%expect {|
+          "delta \"ab\" (str \"abc\")": [c] |}]
       ;;
     end)
   ;;
@@ -605,22 +664,20 @@ let%test_module _ =
       go upper;
       [%expect
         {|
-        {first: {};
-         flast: {};
+        {first: [];
+         flast: [];
          null: true;
          guarded: true}
-        {first: {'a'};
-         flast: {};
+        {first: [a];
+         flast: [];
          null: false;
          guarded: true}
-        {first: {};
-         flast: {};
+        {first: [];
+         flast: [];
          null: false;
          guarded: true}
-        {first:
-          {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
-           'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'};
-         flast: {};
+        {first: [A-Z];
+         flast: [];
          null: false;
          guarded: true} |}]
     ;;
