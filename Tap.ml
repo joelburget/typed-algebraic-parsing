@@ -7,55 +7,6 @@ exception Parse_error of string
 
 let error fmt = Stdlib.Format.kasprintf (fun str -> raise (Parse_error str)) fmt
 
-module Char_set = struct
-  let min_char = Char.of_int_exn 0
-  let max_char = Char.of_int_exn 255
-
-  include Diet.Make (struct
-    type t = char
-
-    let compare = Char.compare
-    let zero = min_char
-
-    let succ c =
-      match c |> Char.to_int |> Int.succ |> Char.of_int with None -> c | Some c -> c
-    ;;
-
-    let pred c =
-      match c |> Char.to_int |> Int.pred |> Char.of_int with None -> c | Some c -> c
-    ;;
-
-    let sub a b =
-      let a = Char.to_int a in
-      let b = Char.to_int b in
-      Char.of_int_exn (a - b)
-    ;;
-
-    let add a b =
-      let a = Char.to_int a in
-      let b = Char.to_int b in
-      Char.of_int_exn (a + b)
-    ;;
-
-    let to_string c = Fmt.str "%C" c
-  end)
-
-  let of_interval interval = add interval empty
-  let singleton c = of_interval (Interval.make c c)
-  let any = of_interval (Interval.make min_char max_char)
-
-  let pp ppf char_set =
-    Fmt.pf ppf "@[[";
-    iter
-      (fun interval ->
-        let x = Interval.x interval in
-        let y = Interval.y interval in
-        if Char.(x = y) then Fmt.pf ppf "%c" x else Fmt.pf ppf "%c-%c" x y)
-      char_set;
-    Fmt.pf ppf "]@]"
-  ;;
-end
-
 module Type = struct
   type t =
     { first : Char_set.t
