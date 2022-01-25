@@ -68,6 +68,7 @@ let empty = Pos Interval_set.empty
 let any = Neg Interval_set.empty
 let singleton_interval x = Interval_set.Interval.make x x
 let singleton c = Pos (Interval_set.of_interval (singleton_interval c))
+let of_char c = singleton (Uchar.of_char c)
 
 let of_list xs =
   Pos
@@ -101,11 +102,13 @@ let mem t c =
 let is_empty = function Pos iset when Interval_set.is_empty iset -> true | _ -> false
 
 let choose = function
-  | Pos interval ->
-    let interval = Interval_set.choose interval in
-    Interval_set.Interval.(x interval, y interval)
-  | Neg _ -> failwith "TODO"
+  | Pos iset ->
+    (try Some (iset |> Interval_set.choose |> Interval_set.Interval.x) with _ -> None)
+  | Neg iset -> Some (Interval_set.find_next_gap Uchar.min iset)
 ;;
+
+let meta_chars = Base.String.to_list "\\|&!*.[]()"
+let is_meta_char = Base.List.mem ~equal:Base.Char.( = ) meta_chars
 
 let pp_char ppf c =
   if Uchar.is_char c
@@ -113,7 +116,9 @@ let pp_char ppf c =
     let c = Uchar.to_char c in
     if Base.Char.is_alphanum c
     then Fmt.pf ppf "%c" c
-    else Fmt.pf ppf "%s" (Base.Char.escaped c))
+    else if is_meta_char c
+    then Fmt.pf ppf "\\%c" c
+    else Fmt.pf ppf "\\u%d" (Base.Char.to_int c))
   else Fmt.pf ppf "\\u%d" (Uchar.to_int c)
 ;;
 
@@ -141,10 +146,9 @@ let pp ppf iset =
 
 let%test_module "pp" =
   (module struct
-    let c = singleton (Uchar.of_char 'c')
-    let d = singleton (Uchar.of_char 'd')
+    let c = of_char 'c'
+    let d = of_char 'd'
     let cd = of_list Uchar.[ of_char 'c'; of_char 'd' ]
-    let empty = Pos Interval_set.empty
 
     let%expect_test "pp" =
       let go char_class = Fmt.pr "%a@." pp char_class in
@@ -157,6 +161,7 @@ let%test_module "pp" =
       go (Neg (singleton (Uchar.of_int 1234)));
       go cd;
       go (negate cd);
+      go (of_char '(');
       [%expect
         {|
         []
@@ -166,7 +171,8 @@ let%test_module "pp" =
         \u1234
         [^\u1234]
         [c-d]
-        [^c-d] |}]
+        [^c-d]
+        \( |}]
     ;;
 
     let%expect_test "union" =
@@ -197,6 +203,31 @@ let%test_module "pp" =
         c
         d
         [^c-d] |}]
+    ;;
+
+    let%expect_test "choose" =
+      let go a = choose a |> Fmt.pr "%a@." Fmt.(option pp_char ~none:(any "None")) in
+      go empty;
+      go c;
+      go (negate c);
+      go (negate (singleton Uchar.min));
+      [%expect {|
+        None
+        c
+        \u0
+        \u1 |}]
+    ;;
+
+    let%expect_test "mem" =
+      let go cls char = mem cls char |> Fmt.pr "%b@." in
+      let char = Uchar.of_char 'c' in
+      go empty char;
+      go c char;
+      go any char;
+      [%expect{|
+        false
+        true
+        true |}]
     ;;
   end)
 ;;
