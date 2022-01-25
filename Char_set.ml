@@ -48,16 +48,48 @@ include Core
 include Comparable.Make (Core)
 
 let of_interval interval = add interval empty
-let singleton c = of_interval (Interval.make c c)
+let range c1 c2 = of_interval (Interval.make c1 c2)
+let singleton c = range c c
 let any = of_interval (Interval.make min_char max_char)
 let complement = diff any
+
+exception Unexpected_sexp
+
+let interval_of_sexp = function
+  | Sexp.List [ Atom x; Atom y ] -> Interval.make (Char.of_string x) (Char.of_string y)
+  | sexp -> raise (Sexp.Of_sexp_error (Unexpected_sexp, sexp))
+;;
+
+let t_of_sexp = function
+  | Sexp.List intervals ->
+    intervals
+    |> List.map ~f:(fun sexp -> sexp |> interval_of_sexp |> of_interval)
+    |> List.fold ~init:empty ~f:union
+  | sexp -> raise (Sexp.Of_sexp_error (Unexpected_sexp, sexp))
+;;
+
+let pp_char ppf c =
+  if Char.is_print c then Fmt.pf ppf "%c" c else Fmt.pf ppf "\\u%d" (Char.to_int c)
+;;
 
 let pp ppf char_set =
   Fmt.pf ppf "@[[";
   iter
     (fun interval ->
       let x, y = Interval.(x interval, y interval) in
-      if Char.(x = y) then Fmt.pf ppf "%c" x else Fmt.pf ppf "%c-%c" x y)
+      if Char.(x = min_char && y = max_char)
+      then Fmt.pf ppf "."
+      else if Char.(x = y)
+      then pp_char ppf x
+      else Fmt.pf ppf "%a-%a" pp_char x pp_char y)
     char_set;
   Fmt.pf ppf "]@]"
+;;
+
+let interval_to_tuple interval = Interval.(x interval, y interval)
+let intervals iset = fold (fun ival -> ival |> interval_to_tuple |> List.cons) iset []
+
+let choose iset =
+  let interval = choose iset in
+  Interval.(x interval, y interval)
 ;;

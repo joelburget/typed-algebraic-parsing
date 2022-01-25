@@ -380,7 +380,7 @@ module Regex = struct
     | Star of t
     | And of t list
     | Complement of t
-  [@@deriving compare, equal]
+  [@@deriving compare, equal, sexp]
 
   (* No Xor = 1 *)
   let rec prec = function
@@ -428,7 +428,7 @@ module Regex = struct
   ;;
 
   let star = function Eps -> Eps | Empty -> Eps | Star _ as re -> re | re -> Star re
-  let char_set _ = failwith "TODO"
+  let plus re = re >>> star re
 
   let merge_csets in_res merge_op =
     let charsets, res =
@@ -460,7 +460,7 @@ module Regex = struct
   let ( || ) re1 re2 =
     match re1, re2 with
     | Empty, re | re, Empty -> re
-    | Char_set s1, Char_set s2 -> char_set (Char_set.union s1 s2)
+    | Char_set s1, Char_set s2 -> Char_set (Char_set.union s1 s2)
     | Alt res1, Alt res2 -> merge_alts res1 res2
     | Alt res1, _ -> merge_alts res1 [ re2 ]
     | _, Alt res2 -> merge_alts [ re1 ] res2
@@ -477,7 +477,7 @@ module Regex = struct
   let ( && ) re1 re2 =
     match re1, re2 with
     | Empty, _ | _, Empty -> Empty
-    | Char_set s1, Char_set s2 -> char_set (Char_set.inter s1 s2)
+    | Char_set s1, Char_set s2 -> Char_set (Char_set.inter s1 s2)
     | And res1, And res2 -> merge_ands res1 res2
     | And res1, _ -> merge_ands res1 [ re2 ]
     | re1, And res2 -> merge_ands [ re1 ] res2
@@ -526,29 +526,133 @@ module Regex = struct
     loop 0
   ;;
 
-  (*
-  let class' = function
-    | Eps -> Set.singleton (module Char_set) Char_set.any
-    | Char_set cs -> Set.of_list (module Char_set) [ cs; Char_set.complement cs ]
-    | _ -> failwith "TODO"
+  (* Cross product (intersection) of two sets of character sets. *)
+  let cross s1 s2 =
+    Set.fold
+      s1
+      ~init:(Set.empty (module Char_set))
+      ~f:(fun accum s1_elem ->
+        Set.fold s2 ~init:accum ~f:(fun accum s2_elem ->
+            Set.add accum (Char_set.inter s1_elem s2_elem)))
   ;;
 
-  let mk_dfa re =
-    let q0 = delta Eps re in
-    let _ = explore
+  (* Trivial derivative class, the singleton set of any character. *)
+  let trivial = Set.singleton (module Char_set) Char_set.any
+
+  (* Approximate derivative class for a regex. *)
+  let rec class' = function
+    | Eps | Empty | Seq [] -> trivial
+    | Char_set cs -> Set.of_list (module Char_set) [ cs; Char_set.complement cs ]
+    | Seq [ re ] -> class' re
+    | Seq (re :: res) ->
+      if nullable re then class' re else cross (class' re) (class' (Seq res))
+    | Star re -> class' re
+    | Alt res | And res -> res |> List.map ~f:class' |> List.fold ~init:trivial ~f:cross
+    | Complement re -> class' re
+  ;;
 
   module Vector = struct
     type nonrec t = t list
 
     let delta c = List.map ~f:(delta c)
+    let string_delta str = List.map ~f:(string_delta str)
   end
+
+  let derivatives res =
+    res
+    |> List.map ~f:class'
+    |> List.fold ~init:trivial ~f:cross
+    |> Set.to_list
+    |> List.filter_map ~f:(fun set ->
+           if Char_set.is_empty set
+           then None
+           else (
+             let rep, _ = Char_set.choose set in
+             Some (Vector.delta rep res, set)))
+  ;;
+
+  (*
+  let compress sets =
+    let rec part1 set1 = function
+      | [] -> if Char_set.is_empty set1 then [] else [ set1 ]
+      | set2 :: sets ->
+        if Char_set.is_empty set1
+        then set2 :: sets
+        else (
+          let i = Char_set.inter set1 set2 in
+          if Char_set.is_empty i
+          then set2 :: part1 set1 sets
+          else (
+            let s1 = Char_set.diff set1 i in
+            let s2 = Char_set.diff set2 i in
+            let sets' = if Char_set.is_empty s1 then sets else part1 s1 sets in
+            if Char_set.is_empty s2 then i :: sets' else i :: s2 :: sets'))
+    in
+    List.fold
+      ~f:(fun sets char_set -> part1 char_set sets)
+      ~init:[]
+      (Char_set.any :: sets)
+  ;;
+
+  module Re_list = struct
+    module T = struct
+      type nonrec t = t list
+
+      let compare x y = List.compare compare x y
+      let sexp_of_t = List.sexp_of_t sexp_of_t
+      let t_of_sexp = List.t_of_sexp t_of_sexp
+    end
+
+    include T
+    include Comparable.Make (T)
+  end
+
+  let derivatives2 res =
+    let rec classes class_map sets =
+      match sets with
+      | [] -> Map.to_alist class_map
+      | set :: sets ->
+        let rep, _ = Char_set.choose set in
+        let derivs = List.map ~f:(delta rep) res in
+        (match Map.find class_map derivs with
+        | None -> classes (Map.set class_map ~key:derivs ~data:set) sets
+        | Some set' ->
+          let map' = Map.set class_map ~key:derivs ~data:(Char_set.union set set') in
+          classes map' sets)
+    in
+    res
+    |> List.map ~f:class'
+    |> List.fold ~init:trivial ~f:cross
+    |> Set.to_list
+    |> compress
+    |> classes (Map.empty (module Re_list))
+  ;;
      *)
+
+  (*
+  type char_set_set = (Char_set.t, Char_set.comparator_witness) Set.t
+
+  let derivatives3 (res : t list) =
+    let rec goto current_state class' states =
+      let rep, _ = Char_set.choose class' in
+      let new_state = Vector.delta rep current_state in
+      if Set.mem states new_state
+      then states
+      else explore (Set.add states new_state) new_state
+    and explore states current_state =
+      List.fold ~f:(goto current_state) ~init:states (class' current_state)
+    in
+    let q0 : t = List.hd_exn res in
+    explore (Set.singleton (module Char_set) q0 : char_set_set) q0
+  ;;
+  *)
 
   let%test_module _ =
     (module struct
-      let pp title = Fmt.pr "@[<hov 2>%S:@ %a@]@." title pp
+      let pp' title = Fmt.pr "@[<hv 2>%S:@ %a@]@." title pp
 
       let%expect_test "pp" =
+        let pp = pp' in
         pp "Empty" Empty;
         pp "Eps" Eps;
         pp "Char_set Char_set.empty" (Char_set Char_set.empty);
@@ -576,6 +680,7 @@ module Regex = struct
       ;;
 
       let%expect_test "delta" =
+        let pp = pp' in
         let go title re c = delta c re |> pp title in
         go "delta 'c' (chr 'c')" (chr 'c') 'c';
         pp "chr 'd' || Empty >>> Empty" (chr 'd' || Empty >>> Empty);
@@ -590,10 +695,107 @@ module Regex = struct
       ;;
 
       let%expect_test "string_delta" =
-        let go title re str = string_delta str re |> pp title in
+        let go title re str = string_delta str re |> pp' title in
         go {|delta "ab" (str "abc")|} (str "abc") "ab";
         [%expect {|
           "delta \"ab\" (str \"abc\")": [c] |}]
+      ;;
+
+      let go res =
+        let open Fmt in
+        let pp_derivative =
+          braces
+            (record
+               ~sep:semi
+               [ field "res" fst (brackets (list pp ~sep:semi))
+               ; field "char_set" snd Char_set.pp
+               ])
+        in
+        pr
+          "@[<hv 2>%a ->@ %a@]@."
+          (brackets (list pp ~sep:semi))
+          res
+          (hvbox (list pp_derivative))
+          (derivatives res)
+      ;;
+
+      let%expect_test "derivative []" =
+        go [];
+        [%expect {|
+          [] -> {res: [];
+                 char_set: [.]} |}]
+      ;;
+
+      let%expect_test "derivative ['c']" =
+        go [ chr 'c' ];
+        [%expect
+          {|
+          [[c]] ->
+            {res: [{empty}];
+             char_set: [\u0-bd-\u255]}{res: [{eps}];
+                                       char_set: [c]} |}]
+      ;;
+
+      let%expect_test "derivative ['c'; 'd']" =
+        go [ chr 'c'; chr 'd' ];
+        [%expect
+          {|
+          [[c]; [d]] ->
+            {res: [{empty}; {empty}];
+             char_set: [\u0-be-\u255]}
+            {res: [{eps}; {empty}];
+             char_set: [c]}
+            {res: [{empty}; {eps}];
+             char_set: [d]} |}]
+      ;;
+
+      let%expect_test "derivative ['c'; {empty}]" =
+        go [ chr 'c'; Empty ];
+        [%expect
+          {|
+          [[c]; {empty}] ->
+            {res: [{empty}; {empty}];
+             char_set: [\u0-bd-\u255]}
+            {res: [{eps}; {empty}];
+             char_set: [c]} |}]
+      ;;
+
+      (* Regex derivatives reexamined fig 4b. *)
+      let%expect_test {|derivative ["ab"; "bc"]|} =
+        go [ str "ab" || str "bc" ];
+        [%expect
+          {|
+          [[a][b]|[b][c]] ->
+            {res: [{empty}];
+             char_set: [\u0-`d-\u255]}
+            {res: [[b]];
+             char_set: [a]}
+            {res: [[c]];
+             char_set: [b]}
+            {res: [{empty}];
+             char_set: [c]} |}]
+      ;;
+
+      let%expect_test {|derivative ["ab"; "bc"]|} =
+        go
+          [ plus (Char_set (Char_set.range 'a' 'z'))
+          ; chr ' ' || chr '\n'
+          ; chr '('
+          ; chr ')'
+          ];
+        [%expect
+          {|
+          [[a-z][a-z]; [\u10 ]; [(]; [)]] ->
+            {res: [{empty}; {empty}; {empty}; {empty}];
+             char_set: [\u0-\u9\u11-\u31!-'*-`{-\u255]}
+            {res: [{empty}; {eps}; {empty}; {empty}];
+             char_set: [\u10 ]}
+            {res: [{empty}; {empty}; {eps}; {empty}];
+             char_set: [(]}
+            {res: [{empty}; {empty}; {empty}; {eps}];
+             char_set: [)]}
+            {res: [[a-z]; {empty}; {empty}; {empty}];
+             char_set: [a-z]} |}]
       ;;
     end)
   ;;
