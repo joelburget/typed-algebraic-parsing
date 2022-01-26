@@ -187,6 +187,15 @@ let rec class' = function
 
 type re = t
 
+module Int_pair = struct
+  module T = struct
+    type t = int * int [@@deriving compare, sexp]
+  end
+
+  include T
+  include Comparable.Make (T)
+end
+
 module Dfa : sig
   (* start state is always 0 *)
   type t =
@@ -220,15 +229,6 @@ end = struct
              (list (pair (pair int int) Char_class.pp))
          ])
   ;;
-
-  module Int_pair = struct
-    module T = struct
-      type t = int * int [@@deriving compare, sexp]
-    end
-
-    include T
-    include Comparable.Make (T)
-  end
 
   type re_map = (Re.t, int, Re.comparator_witness) Map.t
   type connection_alist = ((int * int) * Char_class.t) list
@@ -333,10 +333,94 @@ end = struct
 end
 
 module Vector = struct
-  type nonrec t = t list
+  module Core = struct
+    module T = struct
+      type t = Re.t list [@@deriving compare, sexp]
+    end
+
+    include T
+    include Comparable.Make (T)
+  end
+
+  open Core
 
   let delta c = List.map ~f:(delta c)
   let string_delta str = List.map ~f:(string_delta str)
+  let pp_vec = Fmt.(brackets (list pp ~sep:semi))
+
+  module Dfa : sig
+    type nonrec t =
+      { state_numbers : (int * t) list
+      ; accepting : int list
+      ; transitions : ((int * int) * Char_class.t) list
+      }
+
+    val make : Core.t -> t
+  end = struct
+    type nonrec t =
+      { state_numbers : (int * t) list
+      ; accepting : int list
+      ; transitions : ((int * int) * Char_class.t) list
+      }
+
+    let pp =
+      let open Fmt in
+      let pair x y = parens (pair ~sep:comma x y) in
+      let list elem = brackets (list elem ~sep:semi) in
+      braces
+        (record
+           ~sep:semi
+           [ field "state_numbers" (fun t -> t.state_numbers) (list (pair int pp_vec))
+           ; field "accepting" (fun t -> t.accepting) (list int)
+           ; field
+               "transitions"
+               (fun t -> t.transitions)
+               (list (pair (pair int int) Char_class.pp))
+           ])
+    ;;
+
+    type re_map = (Core.t, int, Core.comparator_witness) Map.t
+    type connection_alist = ((int * int) * Char_class.t) list
+    type connection_map = (Int_pair.t, Char_class.t, Int_pair.comparator_witness) Map.t
+    type graph_state = re_map * connection_alist
+
+    let class' : Core.t -> (Char_class.t, Char_class.comparator_witness) Set.t =
+     fun res -> res |> List.map ~f:class' |> List.fold ~init:trivial ~f:cross
+   ;;
+
+    let nullable res = List.exists res ~f:nullable
+
+    let make vec =
+      let rec explore graph (state : Core.t) : graph_state =
+        state
+        |> class'
+        |> Set.filter ~f:(fun cls -> not (Char_class.is_empty cls))
+        |> Set.to_list
+        |> List.fold_left ~init:graph ~f:(goto state)
+      and goto (vec : Core.t) (states, edges) char_class : graph_state =
+        let char = Char_class.choose_exn char_class in
+        let derived_re = delta char vec in
+        let mk_edge dest = ((Map.find_exn states vec, dest), char_class) :: edges in
+        match Map.find states derived_re with
+        | Some w -> states, mk_edge w
+        | None ->
+          let size = Map.length states in
+          explore (Map.add_exn states ~key:derived_re ~data:size, mk_edge size) derived_re
+      in
+      let graph : graph_state = Map.singleton (module Core) vec 0, [] in
+      let states, edges = explore graph vec in
+      let transitions =
+        edges |> Map.of_alist_reduce (module Int_pair) ~f:Char_class.union |> Map.to_alist
+      in
+      let state_numbers =
+        states |> Map.to_alist |> List.map ~f:(fun (vec, i) -> i, vec)
+      in
+      let accepting =
+        states |> Map.filteri ~f:(fun ~key:vec ~data:_i -> nullable vec) |> Map.data
+      in
+      { state_numbers; accepting; transitions }
+    ;;
+  end
 end
 
 let derivatives res =
