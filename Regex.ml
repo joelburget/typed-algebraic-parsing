@@ -1,6 +1,6 @@
 open Base
 
-module Re = struct
+module Re_type = struct
   module T = struct
     type t =
       | Char_class of Char_class.t
@@ -16,7 +16,7 @@ module Re = struct
   include Comparable.Make (T)
 end
 
-open Re
+include Re_type
 
 let empty = Char_class Char_class.empty
 let any = Char_class Char_class.any
@@ -196,23 +196,23 @@ module Int_pair = struct
   include Comparable.Make (T)
 end
 
-module Dfa : sig
-  (* start state is always 0 *)
+module type Dfa_able = sig
+  type t
+
+  include Base.Comparable.S with type t := t
+
+  val pp : t Fmt.t
+  val class' : t -> (Char_class.t, Char_class.comparator_witness) Set.t
+  val nullable : t -> bool
+  val delta : Uchar.t -> t -> t
+end
+
+module Make_dfa (Core : Dfa_able) = struct
   type t =
-    { state_numbers : (int * re) list
+    { state_numbers : (int * Core.t) list
     ; accepting : int list
     ; transitions : ((int * int) * Char_class.t) list
     }
-
-  val make : re -> t
-end = struct
-  type t =
-    { state_numbers : (int * re) list
-    ; accepting : int list
-    ; transitions : ((int * int) * Char_class.t) list
-    }
-
-  let pp_re = pp
 
   let pp =
     let open Fmt in
@@ -221,7 +221,7 @@ end = struct
     braces
       (record
          ~sep:semi
-         [ field "state_numbers" (fun t -> t.state_numbers) (list (pair int pp_re))
+         [ field "state_numbers" (fun t -> t.state_numbers) (list (pair int Core.pp))
          ; field "accepting" (fun t -> t.accepting) (list int)
          ; field
              "transitions"
@@ -230,88 +230,107 @@ end = struct
          ])
   ;;
 
-  type re_map = (Re.t, int, Re.comparator_witness) Map.t
+  type re_map = (Core.t, int, Core.comparator_witness) Map.t
   type connection_alist = ((int * int) * Char_class.t) list
-  type connection_map = (Int_pair.t, Char_class.t, Int_pair.comparator_witness) Map.t
   type graph_state = re_map * connection_alist
 
-  let make re =
-    let rec explore graph state : graph_state =
+  let make vec =
+    let rec explore graph (state : Core.t) : graph_state =
       state
-      |> class'
+      |> Core.class'
       |> Set.filter ~f:(fun cls -> not (Char_class.is_empty cls))
       |> Set.to_list
       |> List.fold_left ~init:graph ~f:(goto state)
-    and goto re (states, edges) char_class : graph_state =
+    and goto (vec : Core.t) (states, edges) char_class : graph_state =
       let char = Char_class.choose_exn char_class in
-      let derived_re = delta char re in
-      let mk_edge dest = ((Map.find_exn states re, dest), char_class) :: edges in
+      let derived_re = Core.delta char vec in
+      let mk_edge dest = ((Map.find_exn states vec, dest), char_class) :: edges in
       match Map.find states derived_re with
       | Some w -> states, mk_edge w
       | None ->
         let size = Map.length states in
         explore (Map.add_exn states ~key:derived_re ~data:size, mk_edge size) derived_re
     in
-    let graph : graph_state = Map.singleton (module Re) re 0, [] in
-    let states, edges = explore graph re in
+    let graph : graph_state = Map.singleton (module Core) vec 0, [] in
+    let states, edges = explore graph vec in
     let transitions =
       edges |> Map.of_alist_reduce (module Int_pair) ~f:Char_class.union |> Map.to_alist
     in
-    let state_numbers = states |> Map.to_alist |> List.map ~f:(fun (re, i) -> i, re) in
-    let accepting =
-      states |> Map.filteri ~f:(fun ~key:re ~data:_i -> nullable re) |> Map.data
-    in
+    let state_numbers = states |> Map.to_alist |> List.map ~f:(fun (vec, i) -> i, vec) in
+    let accepting = states |> Map.filter_keys ~f:Core.nullable |> Map.data in
     { state_numbers; accepting; transitions }
   ;;
+end
 
-  let%test_module "Dfa.make" =
-    (module struct
-      let go re = re |> make |> Fmt.pr "%a@." pp
+module Dfa : sig
+  (* start state is always 0 *)
+  type t =
+    { state_numbers : (int * re) list
+    ; accepting : int list
+    ; transitions : ((int * int) * Char_class.t) list
+    }
 
-      let%expect_test _ =
-        go eps;
-        [%expect
-          {|
+  val pp : t Fmt.t
+  val make : re -> t
+end = Make_dfa (struct
+  include Re_type
+
+  let pp = pp
+  let class' = class'
+  let nullable = nullable
+  let delta = delta
+end)
+
+let%test_module "Dfa.make" =
+  (module struct
+    open Dfa
+
+    let go re = re |> make |> Fmt.pr "%a@." pp
+
+    let%expect_test _ =
+      go eps;
+      [%expect
+        {|
           {state_numbers: [(1, []); (0, []*)];
            accepting: [0];
            transitions: [((0, 1), .); ((1, 1), .)]} |}]
-      ;;
+    ;;
 
-      let%expect_test _ =
-        go any;
-        [%expect
-          {|
+    let%expect_test _ =
+      go any;
+      [%expect
+        {|
           {state_numbers: [(2, []); (0, .); (1, []*)];
            accepting: [1];
            transitions: [((0, 1), .); ((1, 2), .); ((2, 2), .)]} |}]
-      ;;
+    ;;
 
-      let%expect_test _ =
-        go (chr 'c');
-        [%expect
-          {|
+    let%expect_test _ =
+      go (chr 'c');
+      [%expect
+        {|
           {state_numbers: [(2, []); (0, c); (1, []*)];
            accepting: [1];
            transitions: [((0, 1), c); ((0, 2), [^c]); ((1, 2), .); ((2, 2), .)]} |}]
-      ;;
+    ;;
 
-      let%expect_test _ =
-        go (str "ab" || str "bc");
-        [%expect
-          {|
+    let%expect_test _ =
+      go (str "ab" || str "bc");
+      [%expect
+        {|
           {state_numbers: [(3, []); (1, b); (4, c); (2, []*); (0, ab|bc)];
            accepting: [2];
            transitions:
             [((0, 1), a); ((0, 3), [^a-b]); ((0, 4), b); ((1, 2), b); ((1, 3), [^b]);
              ((2, 3), .); ((3, 3), .); ((4, 2), c); ((4, 3), [^c])]} |}]
-      ;;
+    ;;
 
-      let%expect_test _ =
-        go
-          (star (Char_class (Char_class.range (Uchar.of_char 'a') (Uchar.of_char 'z')))
-          && complement (str "()" || str "do" || str "for" || str "if" || str "while"));
-        [%expect
-          {|
+    let%expect_test _ =
+      go
+        (star (Char_class (Char_class.range (Uchar.of_char 'a') (Uchar.of_char 'z')))
+        && complement (str "()" || str "do" || str "for" || str "if" || str "while"));
+      [%expect
+        {|
           {state_numbers:
             [(1, []); (2, [a-z]*&![]); (11, [a-z]*&!e); (7, [a-z]*&!f); (3, [a-z]*&!o);
              (6, [a-z]*&!r); (8, [a-z]*&!hile); (9, [a-z]*&!ile); (10, [a-z]*&!le);
@@ -327,100 +346,59 @@ end = struct
              ((8, 9), h); ((9, 1), [^a-z]); ((9, 2), [a-hj-z]); ((9, 10), i);
              ((10, 1), [^a-z]); ((10, 2), [a-km-z]); ((10, 11), l); ((11, 1), [^a-z]);
              ((11, 2), [a-df-z]); ((11, 4), e)]} |}]
-      ;;
-    end)
-  ;;
-end
+    ;;
+  end)
+;;
 
 module Vector = struct
   module Core = struct
     module T = struct
-      type t = Re.t list [@@deriving compare, sexp]
+      type t = Re_type.t list [@@deriving compare, sexp]
     end
 
     include T
     include Comparable.Make (T)
-  end
 
-  open Core
-
-  let delta c = List.map ~f:(delta c)
-  let string_delta str = List.map ~f:(string_delta str)
-  let pp_vec = Fmt.(brackets (list pp ~sep:semi))
-
-  module Dfa : sig
-    type nonrec t =
-      { state_numbers : (int * t) list
-      ; accepting : int list
-      ; transitions : ((int * int) * Char_class.t) list
-      }
-
-    val make : Core.t -> t
-  end = struct
-    type nonrec t =
-      { state_numbers : (int * t) list
-      ; accepting : int list
-      ; transitions : ((int * int) * Char_class.t) list
-      }
-
-    let pp =
-      let open Fmt in
-      let pair x y = parens (pair ~sep:comma x y) in
-      let list elem = brackets (list elem ~sep:semi) in
-      braces
-        (record
-           ~sep:semi
-           [ field "state_numbers" (fun t -> t.state_numbers) (list (pair int pp_vec))
-           ; field "accepting" (fun t -> t.accepting) (list int)
-           ; field
-               "transitions"
-               (fun t -> t.transitions)
-               (list (pair (pair int int) Char_class.pp))
-           ])
-    ;;
-
-    type re_map = (Core.t, int, Core.comparator_witness) Map.t
-    type connection_alist = ((int * int) * Char_class.t) list
-    type connection_map = (Int_pair.t, Char_class.t, Int_pair.comparator_witness) Map.t
-    type graph_state = re_map * connection_alist
-
-    let class' : Core.t -> (Char_class.t, Char_class.comparator_witness) Set.t =
-     fun res -> res |> List.map ~f:class' |> List.fold ~init:trivial ~f:cross
-   ;;
-
+    let delta c = List.map ~f:(delta c)
+    let string_delta str = List.map ~f:(string_delta str)
+    let pp = Fmt.(brackets (list pp ~sep:semi))
+    let class' res = res |> List.map ~f:class' |> List.fold ~init:trivial ~f:cross
     let nullable res = List.exists res ~f:nullable
-
-    let make vec =
-      let rec explore graph (state : Core.t) : graph_state =
-        state
-        |> class'
-        |> Set.filter ~f:(fun cls -> not (Char_class.is_empty cls))
-        |> Set.to_list
-        |> List.fold_left ~init:graph ~f:(goto state)
-      and goto (vec : Core.t) (states, edges) char_class : graph_state =
-        let char = Char_class.choose_exn char_class in
-        let derived_re = delta char vec in
-        let mk_edge dest = ((Map.find_exn states vec, dest), char_class) :: edges in
-        match Map.find states derived_re with
-        | Some w -> states, mk_edge w
-        | None ->
-          let size = Map.length states in
-          explore (Map.add_exn states ~key:derived_re ~data:size, mk_edge size) derived_re
-      in
-      let graph : graph_state = Map.singleton (module Core) vec 0, [] in
-      let states, edges = explore graph vec in
-      let transitions =
-        edges |> Map.of_alist_reduce (module Int_pair) ~f:Char_class.union |> Map.to_alist
-      in
-      let state_numbers =
-        states |> Map.to_alist |> List.map ~f:(fun (vec, i) -> i, vec)
-      in
-      let accepting =
-        states |> Map.filteri ~f:(fun ~key:vec ~data:_i -> nullable vec) |> Map.data
-      in
-      { state_numbers; accepting; transitions }
-    ;;
   end
+
+  include Core
+  module Dfa = Make_dfa (Core)
+
+  let%test_module "Vector.Dfa.make" =
+    (module struct
+      let lexer =
+        [ plus (Char_class (Char_class.range (Uchar.of_char 'a') (Uchar.of_char 'z')))
+        ; chr ' ' || chr '\n'
+        ; chr '('
+        ; chr ')'
+        ]
+      ;;
+
+      open Dfa
+
+      let go vec = vec |> make |> Fmt.pr "%a@." pp
+
+      let%expect_test "fusing lexing and parsing figure 3" =
+        go lexer;
+        [%expect
+          {|
+          {state_numbers:
+            [(2, [[]; []; []; []]); (4, [[]; []; []; []*]); (3, [[]; []; []*; []]);
+             (1, [[]; []*; []; []]); (0, [[a-z][a-z]*; [\u10\u32]; \(; \)]);
+             (5, [[a-z]*; []; []; []])];
+           accepting: [4; 3; 1; 5];
+           transitions:
+            [((0, 1), [\u10\u32]); ((0, 2), [^\u10\u32\(-\)a-z]); ((0, 3), \();
+             ((0, 4), \)); ((0, 5), [a-z]); ((1, 2), .); ((2, 2), .); ((3, 2), .);
+             ((4, 2), .); ((5, 2), [^a-z]); ((5, 5), [a-z])]} |}]
+      ;;
+    end)
+  ;;
 end
 
 let derivatives res =
@@ -579,22 +557,24 @@ let%test_module _ =
 
     let%expect_test {|derivative ["ab"; "bc"]|} =
       go
-        [ (* TODO plus (Char_class (Char_class.range 'a' 'z')) *)
-          chr ' ' || chr '\n'
+        [ plus (Char_class (Char_class.range (Uchar.of_char 'a') (Uchar.of_char 'z')))
+        ; chr ' ' || chr '\n'
         ; chr '('
         ; chr ')'
         ];
       [%expect
         {|
-          [[\u10\u32]; \(; \)] ->
-            {res: [[]*; []; []];
+          [[a-z][a-z]*; [\u10\u32]; \(; \)] ->
+            {res: [[]; []*; []; []];
              char_class: [\u10\u32]}
-            {res: [[]; []*; []];
+            {res: [[]; []; []*; []];
              char_class: \(}
-            {res: [[]; []; []*];
+            {res: [[]; []; []; []*];
              char_class: \)}
-            {res: [[]; []; []];
-             char_class: [^\u10\u32\(-\)]} |}]
+            {res: [[a-z]*; []; []; []];
+             char_class: [a-z]}
+            {res: [[]; []; []; []];
+             char_class: [^\u10\u32\(-\)a-z]} |}]
     ;;
   end)
 ;;
