@@ -69,12 +69,17 @@ let any = Neg Interval_set.empty
 let singleton_interval x = Interval_set.Interval.make x x
 let singleton c = Pos (Interval_set.of_interval (singleton_interval c))
 let of_char c = singleton (Uchar.of_char c)
+let range x y = Pos (Interval_set.of_interval (Interval_set.Interval.make x y))
 
 let of_list xs =
   Pos
     (xs
     |> Base.List.map ~f:singleton_interval
     |> Base.List.fold_right ~init:Interval_set.empty ~f:Interval_set.add)
+;;
+
+let of_string str =
+  str |> Base.String.to_list |> Base.List.map ~f:Uchar.of_char |> of_list
 ;;
 
 let negate = function Pos iset -> Neg iset | Neg iset -> Pos iset
@@ -142,6 +147,12 @@ let pp ppf iset =
     Fmt.pf ppf "[^%a]" pp_single iset
   | Pos iset -> Fmt.pf ppf "[%a]" pp_ranges iset
   | Neg iset -> Fmt.pf ppf "[^%a]" pp_ranges iset
+;;
+
+let choose_exn t =
+  match choose t with
+  | Some char -> char
+  | None -> Fmt.failwith "failed to choose from %a" pp t
 ;;
 
 let%test_module "pp" =
@@ -224,7 +235,7 @@ let%test_module "pp" =
       go empty char;
       go c char;
       go any char;
-      [%expect{|
+      [%expect {|
         false
         true
         true |}]
