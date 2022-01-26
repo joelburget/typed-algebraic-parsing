@@ -244,16 +244,6 @@ end = struct
       |> List.fold_left ~init:graph ~f:(goto state)
     and goto re (states, edges) char_class : graph_state =
       let char = Char_class.choose_exn char_class in
-      (*
-      Fmt.pr
-        "char_class = %a@.char = %a@.derived_re = %a@."
-        Char_class.pp
-        char_class
-        Char_class.pp_char
-        char
-        pp_re
-        re;
-      *)
       let derived_re = delta char re in
       let mk_edge dest = ((Map.find_exn states re, dest), char_class) :: edges in
       match Map.find states derived_re with
@@ -320,7 +310,8 @@ end = struct
         go
           (star (Char_class (Char_class.range (Uchar.of_char 'a') (Uchar.of_char 'z')))
           && complement (str "()" || str "do" || str "for" || str "if" || str "while"));
-        [%expect{|
+        [%expect
+          {|
           {state_numbers:
             [(1, []); (2, [a-z]*&![]); (11, [a-z]*&!e); (7, [a-z]*&!f); (3, [a-z]*&!o);
              (6, [a-z]*&!r); (8, [a-z]*&!hile); (9, [a-z]*&!ile); (10, [a-z]*&!le);
@@ -360,82 +351,6 @@ let derivatives res =
            let rep = Char_class.choose_exn set in
            Some (Vector.delta rep res, set)))
 ;;
-
-(*
-  let compress sets =
-    let rec part1 set1 = function
-      | [] -> if Char_class.is_empty set1 then [] else [ set1 ]
-      | set2 :: sets ->
-        if Char_class.is_empty set1
-        then set2 :: sets
-        else (
-          let i = Char_class.inter set1 set2 in
-          if Char_class.is_empty i
-          then set2 :: part1 set1 sets
-          else (
-            let s1 = Char_class.diff set1 i in
-            let s2 = Char_class.diff set2 i in
-            let sets' = if Char_class.is_empty s1 then sets else part1 s1 sets in
-            if Char_class.is_empty s2 then i :: sets' else i :: s2 :: sets'))
-    in
-    List.fold
-      ~f:(fun sets Char_class -> part1 Char_class sets)
-      ~init:[]
-      (Char_class.any :: sets)
-  ;;
-
-  module Re_list = struct
-    module T = struct
-      type nonrec t = t list
-
-      let compare x y = List.compare compare x y
-      let sexp_of_t = List.sexp_of_t sexp_of_t
-      let t_of_sexp = List.t_of_sexp t_of_sexp
-    end
-
-    include T
-    include Comparable.Make (T)
-  end
-
-  let derivatives2 res =
-    let rec classes class_map sets =
-      match sets with
-      | [] -> Map.to_alist class_map
-      | set :: sets ->
-        let rep, _ = Char_class.choose_exn set in
-        let derivs = List.map ~f:(delta rep) res in
-        (match Map.find class_map derivs with
-        | None -> classes (Map.set class_map ~key:derivs ~data:set) sets
-        | Some set' ->
-          let map' = Map.set class_map ~key:derivs ~data:(Char_class.union set set') in
-          classes map' sets)
-    in
-    res
-    |> List.map ~f:class'
-    |> List.fold ~init:trivial ~f:cross
-    |> Set.to_list
-    |> compress
-    |> classes (Map.empty (module Re_list))
-  ;;
-     *)
-
-(*
-  type char_set_set = (Char_class.t, Char_class.comparator_witness) Set.t
-
-  let derivatives3 (res : t list) =
-    let rec goto current_state class' states =
-      let rep, _ = Char_class.choose_exn class' in
-      let new_state = Vector.delta rep current_state in
-      if Set.mem states new_state
-      then states
-      else explore (Set.add states new_state) new_state
-    and explore states current_state =
-      List.fold ~f:(goto current_state) ~init:states (class' current_state)
-    in
-    let q0 : t = List.hd_exn res in
-    explore (Set.singleton (module Char_class) q0 : char_set_set) q0
-  ;;
-  *)
 
 let%test_module _ =
   (module struct
