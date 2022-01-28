@@ -71,6 +71,12 @@ let singleton c = Pos (Interval_set.of_interval (singleton_interval c))
 let of_char c = singleton (Uchar.of_char c)
 let range x y = Pos (Interval_set.of_interval (Interval_set.Interval.make x y))
 
+let crange x y =
+  Pos
+    (Interval_set.of_interval
+       (Interval_set.Interval.make (Uchar.of_char x) (Uchar.of_char y)))
+;;
+
 let of_list xs =
   Pos
     (xs
