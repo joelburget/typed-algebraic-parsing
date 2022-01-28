@@ -3,4 +3,5 @@
  (libraries base diet fmt)
  (inline_tests)
  (preprocess
-  (pps ppx_jane)))
+  (pps ppx_jane))
+ (wrapped false))
