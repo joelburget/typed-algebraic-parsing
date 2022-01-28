@@ -41,6 +41,7 @@ let rec pp ppf re =
   | Seq [] -> ()
   | Seq [ re ] -> pp ppf re
   | Seq res -> list pp ppf res
+  | Star (Char_class cset) when Char_class.is_empty cset -> Fmt.pf ppf "ε"
   | Star re' -> Fmt.pf ppf "%a*" (pp' (prec re)) re'
   | Alt [] | And [] -> pf ppf "{}"
   | Alt [ re ] | And [ re ] -> pp ppf re
@@ -195,7 +196,7 @@ let%test_module "Re_dfa.make" =
       go eps;
       [%expect
         {|
-          {state_numbers: [(1, []); (0, []*)];
+          {state_numbers: [(1, []); (0, ε)];
            accepting: [0];
            transitions: [((0, 1), .); ((1, 1), .)]} |}]
     ;;
@@ -204,7 +205,7 @@ let%test_module "Re_dfa.make" =
       go any;
       [%expect
         {|
-          {state_numbers: [(2, []); (0, .); (1, []*)];
+          {state_numbers: [(2, []); (0, .); (1, ε)];
            accepting: [1];
            transitions: [((0, 1), .); ((1, 2), .); ((2, 2), .)]} |}]
     ;;
@@ -213,7 +214,7 @@ let%test_module "Re_dfa.make" =
       go (chr 'c');
       [%expect
         {|
-          {state_numbers: [(2, []); (0, c); (1, []*)];
+          {state_numbers: [(2, []); (0, c); (1, ε)];
            accepting: [1];
            transitions: [((0, 1), c); ((0, 2), [^c]); ((1, 2), .); ((2, 2), .)]} |}]
     ;;
@@ -222,7 +223,7 @@ let%test_module "Re_dfa.make" =
       go (str "ab" || str "bc");
       [%expect
         {|
-          {state_numbers: [(3, []); (1, b); (4, c); (2, []*); (0, ab|bc)];
+          {state_numbers: [(3, []); (1, b); (4, c); (2, ε); (0, ab|bc)];
            accepting: [2];
            transitions:
             [((0, 1), a); ((0, 3), [^a-b]); ((0, 4), b); ((1, 2), b); ((1, 3), [^b]);
@@ -238,7 +239,7 @@ let%test_module "Re_dfa.make" =
           {state_numbers:
             [(1, []); (2, [a-z]*&![]); (11, [a-z]*&!e); (7, [a-z]*&!f); (3, [a-z]*&!o);
              (6, [a-z]*&!r); (8, [a-z]*&!hile); (9, [a-z]*&!ile); (10, [a-z]*&!le);
-             (5, [a-z]*&!or); (4, [a-z]*&![]*); (0, [a-z]*&!\(\)|do|for|if|while)];
+             (5, [a-z]*&!or); (4, [a-z]*&!ε); (0, [a-z]*&!\(\)|do|for|if|while)];
            accepting: [2; 11; 7; 3; 6; 8; 9; 10; 5; 0];
            transitions:
             [((0, 1), [^a-z]); ((0, 2), [a-ceg-hj-vx-z]); ((0, 3), d); ((0, 5), f);
@@ -272,7 +273,7 @@ let%test_module _ =
       pp "complement (complement (chr 'c'))" (complement (complement (chr 'c')));
       [%expect
         {|
-          "eps": []*
+          "eps": ε
           "Char_class Char_class.empty": []
           "Alt []": {}
           "Alt [ chr 'c' ]": c
@@ -306,13 +307,13 @@ let%test_module _ =
         {|
           "delta 'c' empty": []
           "delta 'c' eps": []
-          "delta 'c' any": []*
-          "delta 'c' (c)": []*
-          "delta 'c' (c || d)": []*
+          "delta 'c' any": ε
+          "delta 'c' (c)": ε
+          "delta 'c' (c || d)": ε
           "delta 'x' (c || d)": []
           "delta 'c' [^cd]": []
-          "delta 'x' [^cd]": []*
-          "delta 'c' ([abc] && [cde])": []*
+          "delta 'x' [^cd]": ε
+          "delta 'c' ([abc] && [cde])": ε
           "delta 'x' ([abc] && [cde])": []
           "delta 'c' (str \"cd\")": d
           "delta 'c' (str \"dc\")": [] |}]

@@ -112,19 +112,51 @@ let choose = function
   | Neg iset -> Some (Interval_set.find_next_gap Uchar.min iset)
 ;;
 
-let meta_chars = Base.String.to_list "\\|&!*.[]()"
+let meta_chars = Base.String.to_list "\\|&!*.[]()\""
 let is_meta_char = Base.List.mem ~equal:Base.Char.( = ) meta_chars
 
 let pp_char ppf c =
   if Uchar.is_char c
   then (
     let c = Uchar.to_char c in
-    if Base.Char.is_alphanum c
-    then Fmt.pf ppf "%c" c
+    if Base.Char.(c = '\n' || c = '\t' || c = '\'')
+    then Fmt.pf ppf "%s" (Base.Char.escaped c)
     else if is_meta_char c
     then Fmt.pf ppf "\\%c" c
-    else Fmt.pf ppf "\\u%d" (Base.Char.to_int c))
-  else Fmt.pf ppf "\\u%d" (Uchar.to_int c)
+    else if Base.Char.is_print c
+    then Fmt.pf ppf "%c" c
+    else Fmt.pf ppf "\\u%04X" (Base.Char.to_int c))
+  else Fmt.pf ppf "\\u%04X" (Uchar.to_int c)
+;;
+
+let%test_module "pp_char" =
+  (module struct
+    let ugo uchar = Fmt.pr "%a@." pp_char uchar
+    let go char = ugo (Uchar.of_char char)
+
+    let%expect_test _ =
+      go 'c';
+      go ' ';
+      go '\\';
+      go '|';
+      go '\n';
+      go '\t';
+      go '"';
+      go '\'';
+      ugo (Uchar.of_int 949);
+      [%expect
+        {|
+        c
+
+        \\
+        \|
+        \n
+        \t
+        \"
+        \'
+        \u03B5 |}]
+    ;;
+  end)
 ;;
 
 let pp ppf iset =
@@ -179,8 +211,8 @@ let%test_module "pp" =
         .
         c
         [^c]
-        \u1234
-        [^\u1234]
+        \u04D2
+        [^\u04D2]
         [c-d]
         [^c-d]
         \( |}]
@@ -225,8 +257,8 @@ let%test_module "pp" =
       [%expect {|
         None
         c
-        \u0
-        \u1 |}]
+        \u0000
+        \u0001 |}]
     ;;
 
     let%expect_test "mem" =
