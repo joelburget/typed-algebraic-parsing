@@ -187,6 +187,19 @@ let choose_exn t =
   | None -> Fmt.failwith "failed to choose from %a" pp t
 ;;
 
+module Ring_laws = struct
+  let ( + ) = union
+  let ( * ) = inter
+  let plus_associative a b c = a + b + c = a + (b + c)
+  let plus_commutative a b = a + b = b + a
+  let ident a = a + empty = a
+  let plus_inverse a = a + negate a = empty
+  let mul_associative a b c = a * b * c = a * (b * c)
+  let mul_ident a = a * any = a
+  let left_distributive a b c = a * (b + c) = (a * b) + (a * c)
+  let right_distributive a b c = (b + c) * a = (b * a) + (c * a)
+end
+
 let%test_module "pp" =
   (module struct
     let c = of_char 'c'
