@@ -1,5 +1,3 @@
-(* val typeof : type ctx a d. ctx tp_env -> (ctx, a) Grammar.t -> Tp.t *)
-(* val parse : type ctx a d.  (ctx, a) Grammar.t -> ctx parse_env -> a parser *)
 type 'a parser = char Stream.t -> 'a
 
 module Type : sig
@@ -33,25 +31,29 @@ module Grammar : sig
   type ('ctx, 't, 'd) t
 end
 
-module Env (T : sig
-  type 'a t
-end) : sig
+module type Env_s = sig
+  type 'a elem_t
+
   type 'ctx t =
     | [] : unit t
-    | ( :: ) : 'a T.t * 'ctx t -> ('a * 'ctx) t
+    | ( :: ) : 'a elem_t * 'ctx t -> ('a * 'ctx) t
 
-  val lookup : 'ctx t -> ('ctx, 'a) Var.t -> 'a T.t
+  val lookup : 'ctx t -> ('ctx, 'a) Var.t -> 'a elem_t
 
-  type fn = { f : 'a. 'a T.t -> 'a T.t }
+  type fn = { f : 'a. 'a elem_t -> 'a elem_t }
 
   val map : fn -> 'ctx t -> 'ctx t
 end
 
-type _ type_env
-type _ parse_env
+module Env (T : sig
+  type 'a t
+end) : Env_s
 
-val typeof : 'ctx type_env -> ('ctx, 'a, 'd) Grammar.t -> Type.t
-val parse : ('ctx, 'a, Type.t) Grammar.t -> 'ctx parse_env -> 'a parser
+module Type_env : Env_s
+module Parse_env : Env_s
+
+val typeof : 'ctx Type_env.t -> ('ctx, 'a, 'd) Grammar.t -> Type.t
+val parse : ('ctx, 'a, Type.t) Grammar.t -> 'ctx Parse_env.t -> 'a parser
 
 module Hoas : sig
   type 't t

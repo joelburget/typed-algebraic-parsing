@@ -18,15 +18,15 @@ module Type = struct
   let pp_set ppf set = Char_set.pp ppf set
 
   let pp =
-    Fmt.(
-      braces
-        (record
-           ~sep:semi
-           [ field "first" (fun t -> t.first) pp_set
-           ; field "flast" (fun t -> t.flast) pp_set
-           ; field "null" (fun t -> t.null) bool
-           ; field "guarded" (fun t -> t.guarded) bool
-           ]))
+    let open Fmt in
+    braces
+      (record
+         ~sep:semi
+         [ field "first" (fun t -> t.first) pp_set
+         ; field "flast" (fun t -> t.flast) pp_set
+         ; field "null" (fun t -> t.null) bool
+         ; field "guarded" (fun t -> t.guarded) bool
+         ])
   ;;
 
   let ( = ) t1 t2 =
@@ -131,10 +131,26 @@ module Var = struct
     | S : ('rest, 'a) t -> ('b * 'rest, 'a) t
 end
 
+module type Env_s = sig
+  type 'a elem_t
+
+  type 'ctx t =
+    | [] : unit t
+    | ( :: ) : 'a elem_t * 'ctx t -> ('a * 'ctx) t
+
+  val lookup : 'ctx t -> ('ctx, 'a) Var.t -> 'a elem_t
+
+  type fn = { f : 'a. 'a elem_t -> 'a elem_t }
+
+  val map : fn -> 'ctx t -> 'ctx t
+end
+
 module Env (T : sig
   type 'a t
 end) =
 struct
+  type 'a elem_t = 'a T.t
+
   type 'ctx t =
     | [] : unit t
     | ( :: ) : 'a T.t * 'ctx t -> ('a * 'ctx) t
@@ -157,9 +173,6 @@ end)
 module Parse_env = Env (struct
   type 'a t = char Stream.t -> 'a
 end)
-
-type 'a type_env = 'a Type_env.t
-type 'a parse_env = 'a Parse_env.t
 
 module Grammar = struct
   type ('ctx, 'a, 'd) t' =

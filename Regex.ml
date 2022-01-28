@@ -18,6 +18,7 @@ end
 
 include Re_type
 
+let char_class cls = Char_class cls
 let empty = Char_class Char_class.empty
 let any = Char_class Char_class.any
 let eps = Star empty
@@ -61,7 +62,8 @@ let ( >>> ) t1 t2 =
   | _ -> Seq [ t1; t2 ]
 ;;
 
-let chr c = Char_class (Char_class.singleton (Uchar.of_char c))
+let uchar c = Char_class (Char_class.singleton c)
+let chr c = uchar (Uchar.of_char c)
 let str s = s |> String.to_list |> List.map ~f:chr |> List.fold_right ~init:eps ~f:( >>> )
 let star = function Star _ as re -> re | re -> Star re
 let plus re = re >>> star re
@@ -161,21 +163,10 @@ let string_delta str =
   loop 0
 ;;
 
-(* Cross product (intersection) of two sets of character sets. *)
-let cross s1 s2 =
-  Set.fold
-    s1
-    ~init:(Set.empty (module Char_class))
-    ~f:(fun accum s1_elem ->
-      Set.fold s2 ~init:accum ~f:(fun accum s2_elem ->
-          Set.add accum (Char_class.inter s1_elem s2_elem)))
-;;
-
-(* Trivial derivative class, the singleton set of any character. *)
-let trivial = Set.singleton (module Char_class) Char_class.any
-
 (* Approximate derivative class for a regex. *)
-let rec class' = function
+let rec class' =
+  let open Derivative_class in
+  function
   | Star (Char_class cls) when Char_class.is_empty cls -> trivial
   | Seq [] -> trivial
   | Char_class cs -> Set.of_list (module Char_class) [ cs; Char_class.negate cs ]
@@ -185,94 +176,7 @@ let rec class' = function
   | Alt res | And res -> res |> List.map ~f:class' |> List.fold ~init:trivial ~f:cross
 ;;
 
-type re = t
-
-module Int_pair = struct
-  module T = struct
-    type t = int * int [@@deriving compare, sexp]
-  end
-
-  include T
-  include Comparable.Make (T)
-end
-
-module type Dfa_able = sig
-  type t
-
-  include Base.Comparable.S with type t := t
-
-  val pp : t Fmt.t
-  val class' : t -> (Char_class.t, Char_class.comparator_witness) Set.t
-  val nullable : t -> bool
-  val delta : Uchar.t -> t -> t
-end
-
-module Make_dfa (Core : Dfa_able) = struct
-  type t =
-    { state_numbers : (int * Core.t) list
-    ; accepting : int list
-    ; transitions : ((int * int) * Char_class.t) list
-    }
-
-  let pp =
-    let open Fmt in
-    let pair x y = parens (pair ~sep:comma x y) in
-    let list elem = brackets (list elem ~sep:semi) in
-    braces
-      (record
-         ~sep:semi
-         [ field "state_numbers" (fun t -> t.state_numbers) (list (pair int Core.pp))
-         ; field "accepting" (fun t -> t.accepting) (list int)
-         ; field
-             "transitions"
-             (fun t -> t.transitions)
-             (list (pair (pair int int) Char_class.pp))
-         ])
-  ;;
-
-  type re_map = (Core.t, int, Core.comparator_witness) Map.t
-  type connection_alist = ((int * int) * Char_class.t) list
-  type graph_state = re_map * connection_alist
-
-  let make vec =
-    let rec explore graph (state : Core.t) : graph_state =
-      state
-      |> Core.class'
-      |> Set.filter ~f:(fun cls -> not (Char_class.is_empty cls))
-      |> Set.to_list
-      |> List.fold_left ~init:graph ~f:(goto state)
-    and goto (vec : Core.t) (states, edges) char_class : graph_state =
-      let char = Char_class.choose_exn char_class in
-      let derived_re = Core.delta char vec in
-      let mk_edge dest = ((Map.find_exn states vec, dest), char_class) :: edges in
-      match Map.find states derived_re with
-      | Some w -> states, mk_edge w
-      | None ->
-        let size = Map.length states in
-        explore (Map.add_exn states ~key:derived_re ~data:size, mk_edge size) derived_re
-    in
-    let graph : graph_state = Map.singleton (module Core) vec 0, [] in
-    let states, edges = explore graph vec in
-    let transitions =
-      edges |> Map.of_alist_reduce (module Int_pair) ~f:Char_class.union |> Map.to_alist
-    in
-    let state_numbers = states |> Map.to_alist |> List.map ~f:(fun (vec, i) -> i, vec) in
-    let accepting = states |> Map.filter_keys ~f:Core.nullable |> Map.data in
-    { state_numbers; accepting; transitions }
-  ;;
-end
-
-module Dfa : sig
-  (* start state is always 0 *)
-  type t =
-    { state_numbers : (int * re) list
-    ; accepting : int list
-    ; transitions : ((int * int) * Char_class.t) list
-    }
-
-  val pp : t Fmt.t
-  val make : re -> t
-end = Make_dfa (struct
+module Re_dfa = Dfa.Make (struct
   include Re_type
 
   let pp = pp
@@ -281,9 +185,9 @@ end = Make_dfa (struct
   let delta = delta
 end)
 
-let%test_module "Dfa.make" =
+let%test_module "Re_dfa.make" =
   (module struct
-    open Dfa
+    open Re_dfa
 
     let go re = re |> make |> Fmt.pr "%a@." pp
 
@@ -348,70 +252,6 @@ let%test_module "Dfa.make" =
              ((11, 2), [a-df-z]); ((11, 4), e)]} |}]
     ;;
   end)
-;;
-
-module Vector = struct
-  module Core = struct
-    module T = struct
-      type t = Re_type.t list [@@deriving compare, sexp]
-    end
-
-    include T
-    include Comparable.Make (T)
-
-    let delta c = List.map ~f:(delta c)
-    let string_delta str = List.map ~f:(string_delta str)
-    let pp = Fmt.(brackets (list pp ~sep:semi))
-    let class' res = res |> List.map ~f:class' |> List.fold ~init:trivial ~f:cross
-    let nullable res = List.exists res ~f:nullable
-  end
-
-  include Core
-  module Dfa = Make_dfa (Core)
-
-  let%test_module "Vector.Dfa.make" =
-    (module struct
-      let lexer =
-        [ plus (Char_class (Char_class.range (Uchar.of_char 'a') (Uchar.of_char 'z')))
-        ; chr ' ' || chr '\n'
-        ; chr '('
-        ; chr ')'
-        ]
-      ;;
-
-      open Dfa
-
-      let go vec = vec |> make |> Fmt.pr "%a@." pp
-
-      let%expect_test "fusing lexing and parsing figure 3" =
-        go lexer;
-        [%expect
-          {|
-          {state_numbers:
-            [(2, [[]; []; []; []]); (4, [[]; []; []; []*]); (3, [[]; []; []*; []]);
-             (1, [[]; []*; []; []]); (0, [[a-z][a-z]*; [\u10\u32]; \(; \)]);
-             (5, [[a-z]*; []; []; []])];
-           accepting: [4; 3; 1; 5];
-           transitions:
-            [((0, 1), [\u10\u32]); ((0, 2), [^\u10\u32\(-\)a-z]); ((0, 3), \();
-             ((0, 4), \)); ((0, 5), [a-z]); ((1, 2), .); ((2, 2), .); ((3, 2), .);
-             ((4, 2), .); ((5, 2), [^a-z]); ((5, 5), [a-z])]} |}]
-      ;;
-    end)
-  ;;
-end
-
-let derivatives res =
-  res
-  |> List.map ~f:class'
-  |> List.fold ~init:trivial ~f:cross
-  |> Set.to_list
-  |> List.filter_map ~f:(fun set ->
-         if Char_class.is_empty set
-         then None
-         else (
-           let rep = Char_class.choose_exn set in
-           Some (Vector.delta rep res, set)))
 ;;
 
 let%test_module _ =
@@ -483,98 +323,6 @@ let%test_module _ =
       go {|delta "ab" (str "abc")|} (str "abc") "ab";
       [%expect {|
           "delta \"ab\" (str \"abc\")": c |}]
-    ;;
-
-    let go res =
-      let open Fmt in
-      let pp_derivative =
-        braces
-          (record
-             ~sep:semi
-             [ field "res" fst (brackets (list pp ~sep:semi))
-             ; field "char_class" snd Char_class.pp
-             ])
-      in
-      pr
-        "@[<hv 2>%a ->@ %a@]@."
-        (brackets (list pp ~sep:semi))
-        res
-        (hvbox (list pp_derivative ~sep:sp))
-        (derivatives res)
-    ;;
-
-    let%expect_test "derivative []" =
-      go [];
-      [%expect {|
-          [] -> {res: [];
-                 char_class: .} |}]
-    ;;
-
-    let%expect_test "derivative ['c']" =
-      go [ chr 'c' ];
-      [%expect
-        {|
-          [c] -> {res: [[]*];
-                  char_class: c} {res: [[]];
-                                  char_class: [^c]} |}]
-    ;;
-
-    let%expect_test "derivative ['c'; 'd']" =
-      go [ chr 'c'; chr 'd' ];
-      [%expect
-        {|
-          [c; d] ->
-            {res: [[]*; []];
-             char_class: c}
-            {res: [[]; []*];
-             char_class: d}
-            {res: [[]; []];
-             char_class: [^c-d]} |}]
-    ;;
-
-    let%expect_test "derivative ['c'; []]" =
-      go [ chr 'c'; empty ];
-      [%expect
-        {|
-          [c; []] -> {res: [[]*; []];
-                      char_class: c} {res: [[]; []];
-                                      char_class: [^c]} |}]
-    ;;
-
-    (* Regex derivatives reexamined fig 4b. *)
-    let%expect_test {|derivative ["ab"; "bc"]|} =
-      go [ str "ab" || str "bc" ];
-      [%expect
-        {|
-          [ab|bc] ->
-            {res: [b];
-             char_class: a}
-            {res: [c];
-             char_class: b}
-            {res: [[]];
-             char_class: [^a-b]} |}]
-    ;;
-
-    let%expect_test {|derivative ["ab"; "bc"]|} =
-      go
-        [ plus (Char_class (Char_class.range (Uchar.of_char 'a') (Uchar.of_char 'z')))
-        ; chr ' ' || chr '\n'
-        ; chr '('
-        ; chr ')'
-        ];
-      [%expect
-        {|
-          [[a-z][a-z]*; [\u10\u32]; \(; \)] ->
-            {res: [[]; []*; []; []];
-             char_class: [\u10\u32]}
-            {res: [[]; []; []*; []];
-             char_class: \(}
-            {res: [[]; []; []; []*];
-             char_class: \)}
-            {res: [[a-z]*; []; []; []];
-             char_class: [a-z]}
-            {res: [[]; []; []; []];
-             char_class: [^\u10\u32\(-\)a-z]} |}]
     ;;
   end)
 ;;
