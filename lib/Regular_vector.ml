@@ -47,7 +47,7 @@ let%test_module "Dfa.make" =
              (5, [[a-z]*; []; []; []])];
            accepting: [4; 3; 1; 5];
            transitions:
-            [((0, 1), [\n ]); ((0, 2), [^\n \(-\)a-z]); ((0, 3), \(); ((0, 4), \));
+            [((0, 1), [\n ]); ((0, 2), [^\n \(\)a-z]); ((0, 3), \(); ((0, 4), \));
              ((0, 5), [a-z]); ((1, 2), .); ((2, 2), .); ((3, 2), .); ((4, 2), .);
              ((5, 2), [^a-z]); ((5, 5), [a-z])]} |}]
     ;;
@@ -109,7 +109,7 @@ let%test_module _ =
             {res: [[]; ε];
              char_class: d}
             {res: [[]; []];
-             char_class: [^c-d]} |}]
+             char_class: [^cd]} |}]
     ;;
 
     let%expect_test "derivatives ['c'; []]" =
@@ -132,7 +132,7 @@ let%test_module _ =
             {res: [c];
              char_class: b}
             {res: [[]];
-             char_class: [^a-b]} |}]
+             char_class: [^ab]} |}]
     ;;
 
     let%expect_test {|derivatives ["ab"; "bc"]|} =
@@ -154,7 +154,7 @@ let%test_module _ =
             {res: [[a-z]*; []; []; []];
              char_class: [a-z]}
             {res: [[]; []; []; []];
-             char_class: [^\n \(-\)a-z]} |}]
+             char_class: [^\n \(\)a-z]} |}]
     ;;
   end)
 ;;

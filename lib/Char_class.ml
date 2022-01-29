@@ -174,7 +174,11 @@ let pp ppf iset =
     Interval_set.iter
       (fun interval ->
         let x, y = Interval_set.Interval.(x interval, y interval) in
-        if Uchar.equal x y then pp_char ppf x else Fmt.pf ppf "%a-%a" pp_char x pp_char y)
+        if Uchar.equal x y
+        then pp_char ppf x
+        else if Uchar.(equal x (pred y))
+        then Fmt.pf ppf "%a%a" pp_char x pp_char y
+        else Fmt.pf ppf "%a-%a" pp_char x pp_char y)
       ranges
   in
   match iset with
@@ -239,8 +243,8 @@ let%test_module "pp" =
         [^c]
         \u04D2
         [^\u04D2]
-        [c-d]
-        [^c-d]
+        [cd]
+        [^cd]
         \( |}]
     ;;
 
@@ -253,7 +257,7 @@ let%test_module "pp" =
       go (negate c) (negate d);
       [%expect {|
         c
-        [c-d]
+        [cd]
         [^d]
         [^c]
         . |}]
@@ -271,7 +275,7 @@ let%test_module "pp" =
         []
         c
         d
-        [^c-d] |}]
+        [^cd] |}]
     ;;
 
     let%expect_test "choose" =
