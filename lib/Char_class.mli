@@ -57,6 +57,11 @@ val choose : t -> Uchar.t option
 (** Choose any character from this class. *)
 val choose_exn : t -> Uchar.t
 
+module Infix : sig
+  val ( + ) : t -> t -> t
+  val ( * ) : t -> t -> t
+end
+
 module Laws : sig
   module Ring : sig
     (** [(a + b) + c = a + (b + c)] *)

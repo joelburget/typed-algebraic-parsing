@@ -193,10 +193,15 @@ let choose_exn t =
   | None -> Fmt.failwith "failed to choose from %a" pp t
 ;;
 
+module Infix = struct
+  let ( + ) = union
+  let ( * ) = inter
+end
+
 module Laws = struct
   module Ring = struct
-    let ( + ) = union
-    let ( * ) = inter
+    open Infix
+
     let plus_associative a b c = a + b + c = a + (b + c)
     let plus_commutative a b = a + b = b + a
     let plus_ident a = a + empty = a
