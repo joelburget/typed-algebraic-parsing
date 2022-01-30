@@ -1,0 +1,3 @@
+(executable
+ (name crowbar)
+ (libraries crowbar typed_algebraic_parsing))
