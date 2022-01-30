@@ -186,6 +186,17 @@ module Infix = struct
   let ( * ) = ( && )
 end
 
+module Laws = Laws.Make (struct
+  include T
+  module Infix = Infix
+
+  let additive_ident = empty
+  let multiplicative_ident = any
+  let bottom = empty
+  let top = any
+  let negate = complement
+end)
+
 module Re_dfa = Dfa.Make (struct
   include Re_type
 

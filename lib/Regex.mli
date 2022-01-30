@@ -10,6 +10,8 @@ module Infix : sig
   val ( * ) : t -> t -> t
 end
 
+module Laws : Laws.S with type t = t
+
 val pp : t Fmt.t
 
 (** The empty regex doesn't accept any string. *)
