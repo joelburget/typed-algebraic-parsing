@@ -13,7 +13,8 @@ module Re_type = struct
   end
 
   include T
-  include Comparable.Make (T)
+  module C = Base.Comparable.Make (T)
+  include C
 end
 
 include Re_type
@@ -177,6 +178,13 @@ let rec class' =
     if not (nullable re) then class' re else cross (class' re) (class' (Seq res))
   | Alt res | And res -> res |> List.map ~f:class' |> List.fold ~init:trivial ~f:cross
 ;;
+
+module Infix = struct
+  include C
+
+  let ( + ) = ( || )
+  let ( * ) = ( && )
+end
 
 module Re_dfa = Dfa.Make (struct
   include Re_type

@@ -3,6 +3,13 @@ type t
 include Base.Comparable.S with type t := t
 include Base.Sexpable.S with type t := t
 
+module Infix : sig
+  include Base.Comparable.Infix with type t := t
+
+  val ( + ) : t -> t -> t
+  val ( * ) : t -> t -> t
+end
+
 val pp : t Fmt.t
 
 (** The empty regex doesn't accept any string. *)
