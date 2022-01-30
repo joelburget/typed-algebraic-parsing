@@ -10,6 +10,15 @@ type t
 include Base.Comparable.S with type t := t
 include Base.Sexpable.S with type t := t
 
+module Infix : sig
+  include Base.Comparable.Infix with type t := t
+
+  val ( + ) : t -> t -> t
+  val ( * ) : t -> t -> t
+end
+
+module Laws : Laws.S with type t = t
+
 val pp : t Fmt.t
 
 (** The empty character class [\[\]] *)
@@ -56,62 +65,3 @@ val choose : t -> Uchar.t option
 
 (** Choose any character from this class. *)
 val choose_exn : t -> Uchar.t
-
-module Infix : sig
-  val ( + ) : t -> t -> t
-  val ( * ) : t -> t -> t
-end
-
-module Laws : sig
-  module Ring : sig
-    (** [(a + b) + c = a + (b + c)] *)
-    val plus_associative : t -> t -> t -> bool
-
-    (** [a + b = b + a] *)
-    val plus_commutative : t -> t -> bool
-
-    (** [a + 0 = a] *)
-    val plus_ident : t -> bool
-
-    (** [a * (-a) = 0] *)
-    val mul_inverse : t -> bool
-
-    (** [(a * b) * c = a * (b * c)] *)
-    val mul_associative : t -> t -> t -> bool
-
-    (** [a * b = b * a] *)
-    val mul_commutative : t -> t -> bool
-
-    (** [a * 1 = a] *)
-    val mul_ident : t -> bool
-
-    (** [a * (b + c) = (a * b) + (a * c)] *)
-    val left_distributive : t -> t -> t -> bool
-
-    (** [(b + c) * a = (b * a) + (c * a)] *)
-    val right_distributive : t -> t -> t -> bool
-  end
-
-  module Lattice : sig
-    (** [a + a = a] *)
-    val idempotent_union : t -> bool
-
-    (** [a * a = a] *)
-    val idempotent_inter : t -> bool
-
-    (** [a + (a * b) = a] *)
-    val absorption_1 : t -> t -> bool
-
-    (** [a * (a + b) = a] *)
-    val absorption_2 : t -> t -> bool
-
-    (** [a + (b * c) = (a + b) * (a + c)] *)
-    val distribute_over_union : t -> t -> t -> bool
-
-    (** [a * (b + c) = (a * b) + (a * c)] *)
-    val distribute_over_inter : t -> t -> t -> bool
-  end
-
-  (** [-(-a) = a] *)
-  val double_negation : t -> bool
-end

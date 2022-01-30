@@ -43,6 +43,8 @@ let () =
   Lattice.(
     add_test ~name:"idempotent_union" [ gen ] (fun a -> check (idempotent_union a));
     add_test ~name:"idempotent_inter" [ gen ] (fun a -> check (idempotent_inter a));
+    add_test ~name:"join_bot" [ gen ] (fun a -> check (join_bot a));
+    add_test ~name:"meet_top" [ gen ] (fun a -> check (meet_top a));
     add_test ~name:"absorption_1" [ gen; gen ] (fun a b -> check (absorption_1 a b));
     add_test ~name:"absorption_2" [ gen; gen ] (fun a b -> check (absorption_2 a b));
     add_test ~name:"distribute_over_union" [ gen; gen; gen ] (fun a b c ->

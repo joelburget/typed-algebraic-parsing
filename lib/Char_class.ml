@@ -74,7 +74,8 @@ module T = struct
 end
 
 include T
-include Base.Comparable.Make (T)
+module C = Base.Comparable.Make (T)
+include C
 
 let empty = Pos Interval_set.empty
 let any = Neg Interval_set.empty
@@ -210,36 +211,22 @@ let choose_exn t =
 ;;
 
 module Infix = struct
+  include C
+
   let ( + ) = union
   let ( * ) = inter
 end
 
-module Laws = struct
-  open Infix
+module Laws = Laws.Make (struct
+  include T
+  module Infix = Infix
 
-  module Ring = struct
-    let plus_associative a b c = a + b + c = a + (b + c)
-    let plus_commutative a b = a + b = b + a
-    let plus_ident a = a + empty = a
-    let mul_inverse a = a * negate a = empty
-    let mul_associative a b c = a * b * c = a * (b * c)
-    let mul_commutative a b = a * b = b * a
-    let mul_ident a = a * any = a
-    let left_distributive a b c = a * (b + c) = (a * b) + (a * c)
-    let right_distributive a b c = (b + c) * a = (b * a) + (c * a)
-  end
-
-  module Lattice = struct
-    let idempotent_union a = a + a = a
-    let idempotent_inter a = a * a = a
-    let absorption_1 a b = a + (a * b) = a
-    let absorption_2 a b = a * (a + b) = a
-    let distribute_over_union a b c = a + (b * c) = (a + b) * (a + c)
-    let distribute_over_inter a b c = a * (b + c) = (a * b) + (a * c)
-  end
-
-  let double_negation a = negate (negate a) = a
-end
+  let additive_ident = empty
+  let multiplicative_ident = any
+  let bottom = empty
+  let top = any
+  let negate = negate
+end)
 
 let%test_module "pp" =
   (module struct
