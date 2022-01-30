@@ -73,11 +73,14 @@ module Laws : sig
     (** [a + 0 = a] *)
     val plus_ident : t -> bool
 
-    (** [a + (-a) = 0] *)
-    val plus_inverse : t -> bool
+    (** [a * (-a) = 0] *)
+    val mul_inverse : t -> bool
 
     (** [(a * b) * c = a * (b * c)] *)
     val mul_associative : t -> t -> t -> bool
+
+    (** [a * b = b * a] *)
+    val mul_commutative : t -> t -> bool
 
     (** [a * 1 = a] *)
     val mul_ident : t -> bool
@@ -88,4 +91,27 @@ module Laws : sig
     (** [(b + c) * a = (b * a) + (c * a)] *)
     val right_distributive : t -> t -> t -> bool
   end
+
+  module Lattice : sig
+    (** [a + a = a] *)
+    val idempotent_union : t -> bool
+
+    (** [a * a = a] *)
+    val idempotent_inter : t -> bool
+
+    (** [a + (a * b) = a] *)
+    val absorption_1 : t -> t -> bool
+
+    (** [a * (a + b) = a] *)
+    val absorption_2 : t -> t -> bool
+
+    (** [a + (b * c) = (a + b) * (a + c)] *)
+    val distribute_over_union : t -> t -> t -> bool
+
+    (** [a * (b + c) = (a * b) + (a * c)] *)
+    val distribute_over_inter : t -> t -> t -> bool
+  end
+
+  (** [-(-a) = a] *)
+  val double_negation : t -> bool
 end

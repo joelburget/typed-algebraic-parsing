@@ -203,18 +203,30 @@ module Infix = struct
 end
 
 module Laws = struct
-  module Ring = struct
-    open Infix
+  open Infix
 
+  module Ring = struct
     let plus_associative a b c = a + b + c = a + (b + c)
     let plus_commutative a b = a + b = b + a
     let plus_ident a = a + empty = a
-    let plus_inverse a = a + negate a = empty
+    let mul_inverse a = a * negate a = empty
     let mul_associative a b c = a * b * c = a * (b * c)
+    let mul_commutative a b = a * b = b * a
     let mul_ident a = a * any = a
     let left_distributive a b c = a * (b + c) = (a * b) + (a * c)
     let right_distributive a b c = (b + c) * a = (b * a) + (c * a)
   end
+
+  module Lattice = struct
+    let idempotent_union a = a + a = a
+    let idempotent_inter a = a * a = a
+    let absorption_1 a b = a + (a * b) = a
+    let absorption_2 a b = a * (a + b) = a
+    let distribute_over_union a b c = a + (b * c) = (a + b) * (a + c)
+    let distribute_over_inter a b c = a * (b + c) = (a * b) + (a * c)
+  end
+
+  let double_negation a = negate (negate a) = a
 end
 
 let%test_module "pp" =
