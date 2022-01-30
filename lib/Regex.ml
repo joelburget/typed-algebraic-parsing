@@ -19,6 +19,7 @@ end
 include Re_type
 
 let char_class cls = Char_class cls
+let char_class_of_string str = Char_class (Char_class.of_string str)
 let empty = Char_class Char_class.empty
 let any = Char_class Char_class.any
 let eps = Star empty

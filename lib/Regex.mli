@@ -20,6 +20,9 @@ val ( >>> ) : t -> t -> t
 (** A set of characters. *)
 val char_class : Char_class.t -> t
 
+(** A set of characters. *)
+val char_class_of_string : string -> t
+
 (** A single character. *)
 val chr : char -> t
 
