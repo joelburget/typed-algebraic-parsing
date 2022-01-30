@@ -47,8 +47,8 @@ let rec pp ppf re =
   | Star re' -> Fmt.pf ppf "%a*" (pp' (prec re)) re'
   | Alt [] | And [] -> pf ppf "{}"
   | Alt [ re ] | And [ re ] -> pp ppf re
-  | Alt res -> list ~sep:(any "|@,") (pp' (prec re)) ppf res
-  | And res -> list ~sep:(any "&@,") (pp' (prec re)) ppf res
+  | Alt res -> list ~sep:(any "||@,") (pp' (prec re)) ppf res
+  | And res -> list ~sep:(any "&&@,") (pp' (prec re)) ppf res
   | Complement re -> pf ppf "!%a" pp re
 
 and pp' prec' ppf re = if Int.(prec' > prec re) then Fmt.parens pp ppf re else pp ppf re
@@ -190,6 +190,7 @@ module Laws = Laws.Make (struct
   include T
   module Infix = Infix
 
+  let pp = pp
   let additive_ident = empty
   let multiplicative_ident = any
   let bottom = empty
@@ -243,7 +244,7 @@ let%test_module "Re_dfa.make" =
       go (str "ab" || str "bc");
       [%expect
         {|
-          {state_numbers: [(3, []); (1, b); (4, c); (2, ε); (0, ab|bc)];
+          {state_numbers: [(3, []); (1, b); (4, c); (2, ε); (0, ab||bc)];
            accepting: [2];
            transitions:
             [((0, 1), a); ((0, 3), [^ab]); ((0, 4), b); ((1, 2), b); ((1, 3), [^b]);
@@ -257,9 +258,10 @@ let%test_module "Re_dfa.make" =
       [%expect
         {|
           {state_numbers:
-            [(1, []); (2, [a-z]*&![]); (11, [a-z]*&!e); (7, [a-z]*&!f); (3, [a-z]*&!o);
-             (6, [a-z]*&!r); (8, [a-z]*&!hile); (9, [a-z]*&!ile); (10, [a-z]*&!le);
-             (5, [a-z]*&!or); (4, [a-z]*&!ε); (0, [a-z]*&!\(\)|do|for|if|while)];
+            [(1, []); (2, [a-z]*&&![]); (11, [a-z]*&&!e); (7, [a-z]*&&!f);
+             (3, [a-z]*&&!o); (6, [a-z]*&&!r); (8, [a-z]*&&!hile); (9, [a-z]*&&!ile);
+             (10, [a-z]*&&!le); (5, [a-z]*&&!or); (4, [a-z]*&&!ε);
+             (0, [a-z]*&&!\(\)||do||for||if||while)];
            accepting: [2; 11; 7; 3; 6; 8; 9; 10; 5; 0];
            transitions:
             [((0, 1), [^a-z]); ((0, 2), [a-ceghj-vx-z]); ((0, 3), d); ((0, 5), f);
@@ -297,10 +299,10 @@ let%test_module _ =
           "Char_class Char_class.empty": []
           "Alt []": {}
           "Alt [ chr 'c' ]": c
-          "Alt [ chr 'c'; chr 'd' ]": c|d
+          "Alt [ chr 'c'; chr 'd' ]": c||d
           "And []": {}
           "And [ chr 'c' ]": c
-          "And [ chr 'c'; chr 'd' ]": c&d
+          "And [ chr 'c'; chr 'd' ]": c&&d
           "complement (chr 'c')": !c
           "complement (complement (chr 'c'))": c |}]
     ;;

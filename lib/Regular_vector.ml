@@ -126,7 +126,7 @@ let%test_module _ =
       go [ str "ab" || str "bc" ];
       [%expect
         {|
-          [ab|bc] ->
+          [ab||bc] ->
             {res: [b];
              char_class: a}
             {res: [c];

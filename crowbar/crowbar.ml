@@ -1,31 +1,15 @@
-let gen =
-  let open Char_class in
-  let open Crowbar in
-  fix (fun gen ->
-      choose
-        [ const empty
-        ; const any
-        ; map [ uchar ] singleton
-        ; map [ char ] of_char
-          (*
-        ; map [ uchar; uchar ] (fun a b ->
-              if Base.Int.(Uchar.compare a b <= 0)
-              then Char_class.range a b
-              else Char_class.range b a)
-               *)
-        ; map [ char; char ] (fun a b ->
-              if Base.Int.(Char.compare a b <= 0) then crange a b else crange b a)
-        ; map [ list uchar ] of_list (* ; map [ bytes ] of_string *)
-        ; map [ gen ] negate
-        ; map [ gen; gen ] union
-        ; map [ gen; gen ] inter
-        ])
-;;
+module type S = sig
+  type t
 
-let () =
+  include Laws.S with type t := t
+
+  val gen : t Crowbar.gen
+end
+
+let add_all (module M : S) =
   let open Crowbar in
-  let open Char_class.Laws in
-  Ring.(
+  let gen = M.gen in
+  M.Ring.(
     add_test ~name:"plus_associative" [ gen; gen; gen ] (fun a b c ->
         check (plus_associative a b c));
     add_test ~name:"plus_commutative" [ gen; gen ] (fun a b ->
@@ -40,7 +24,7 @@ let () =
         check (left_distributive a b c));
     add_test ~name:"right_distributive" [ gen; gen; gen ] (fun a b c ->
         check (right_distributive a b c)));
-  Lattice.(
+  M.Lattice.(
     add_test ~name:"idempotent_union" [ gen ] (fun a -> check (idempotent_union a));
     add_test ~name:"idempotent_inter" [ gen ] (fun a -> check (idempotent_inter a));
     add_test ~name:"join_bot" [ gen ] (fun a -> check (join_bot a));
@@ -51,5 +35,54 @@ let () =
         check (distribute_over_union a b c));
     add_test ~name:"distribute_over_inter" [ gen; gen; gen ] (fun a b c ->
         check (distribute_over_inter a b c)));
-  add_test ~name:"double_negation" [ gen ] (fun a -> check (double_negation a))
+  add_test ~name:"double_negation" [ gen ] (fun a -> check (M.double_negation a))
+;;
+
+module Char_class' = struct
+  open Char_class
+  include Laws
+  open Crowbar
+
+  let gen =
+    fix (fun gen ->
+        choose
+          [ const empty
+          ; const any
+          ; map [ uchar ] singleton
+          ; map [ char ] of_char
+            (*
+        ; map [ uchar; uchar ] (fun a b ->
+              if Base.Int.(Uchar.compare a b <= 0)
+              then Char_class.range a b
+              else Char_class.range b a)
+               *)
+          ; map [ char; char ] (fun a b ->
+                if Base.Int.(Char.compare a b <= 0) then crange a b else crange b a)
+          ; map [ list uchar ] of_list (* ; map [ bytes ] of_string *)
+          ; map [ gen ] negate
+          ; map [ gen; gen ] union
+          ; map [ gen; gen ] inter
+          ])
+  ;;
+end
+
+module Regex' = struct
+  open Regex
+  include Laws
+  open Crowbar
+
+  let gen =
+    choose
+      [ const empty
+      ; const any
+      ; const eps
+        (* ; map [ char ] chr *)
+        (* ; map [ uchar ] Regex.uchar *)
+      ]
+  ;;
+end
+
+let () =
+  (* add_all (module Char_class'); *)
+  add_all (module Regex')
 ;;

@@ -221,6 +221,7 @@ module Laws = Laws.Make (struct
   include T
   module Infix = Infix
 
+  let pp = pp
   let additive_ident = empty
   let multiplicative_ident = any
   let bottom = empty
