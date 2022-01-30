@@ -1,8 +1,20 @@
 module Interval_set = struct
   module Elt = struct
-    include Uchar
+    type t = Uchar.t
 
-    let zero = min
+    let compare = Uchar.compare
+
+    let pred c =
+      let open Uchar in
+      if equal c min then min else pred c
+    ;;
+
+    let succ c =
+      let open Uchar in
+      if equal c max then min else succ c
+    ;;
+
+    let zero = Uchar.min
 
     let sub a b =
       let a, b = Uchar.(to_int a, to_int b) in
