@@ -7,8 +7,14 @@ let gen =
         ; const any
         ; map [ uchar ] singleton
         ; map [ char ] of_char
-          (* ; map [ uchar; uchar ] Char_class.range *)
-          (* ; map [ char; char ] crange *)
+          (*
+        ; map [ uchar; uchar ] (fun a b ->
+              if Base.Int.(Uchar.compare a b <= 0)
+              then Char_class.range a b
+              else Char_class.range b a)
+               *)
+        ; map [ char; char ] (fun a b ->
+              if Base.Int.(Char.compare a b <= 0) then crange a b else crange b a)
         ; map [ list uchar ] of_list (* ; map [ bytes ] of_string *)
         ; map [ gen ] negate
         ; map [ gen; gen ] union
