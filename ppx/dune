@@ -1,0 +1,8 @@
+(library
+ (name ppx_tap)
+ (public_name typed_algebraic_parsing.ppx)
+ (inline_tests)
+ (kind ppx_rewriter)
+ (preprocess
+  (pps ppx_jane ppxlib.metaquot))
+ (libraries base typed_algebraic_parsing ppxlib))

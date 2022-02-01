@@ -1,5 +1,6 @@
 (library
  (name typed_algebraic_parsing)
+ (public_name typed_algebraic_parsing)
  (libraries base diet fmt)
  (inline_tests)
  (preprocess
