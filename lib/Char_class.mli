@@ -13,8 +13,14 @@ include Base.Sexpable.S with type t := t
 module Infix : sig
   include Base.Comparable.Infix with type t := t
 
+  (** [union] *)
   val ( + ) : t -> t -> t
+
+  (** [inter] *)
   val ( * ) : t -> t -> t
+
+  (** [asymmetric_diff] *)
+  val ( - ) : t -> t -> t
 end
 
 module Laws : Laws.S with type t = t
@@ -45,6 +51,14 @@ val of_list : Uchar.t list -> t
 (** Any of the characters in the string. *)
 val of_string : string -> t
 
+(** Asymmetric diff, examples:
+
+    - [\[cd\] - d = c]
+    - [\[^c\] - d = \[^cd\]]
+    - [\[cd\] - \[^d\] = d]
+    - [\[^c\] - \[^cd\] = d] *)
+val asymmetric_diff : t -> t -> t
+
 (** [\[^...\] -> \[...\]], [\[...\] -> \[^...\]] *)
 val negate : t -> t
 
@@ -59,6 +73,9 @@ val mem : t -> Uchar.t -> bool
 
 (** Is this class empty? *)
 val is_empty : t -> bool
+
+(** Is [a] a subset of [b]? *)
+val is_subset : t -> t -> bool
 
 (** Choose any character from this class. *)
 val choose : t -> Uchar.t option

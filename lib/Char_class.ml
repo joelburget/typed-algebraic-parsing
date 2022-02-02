@@ -101,6 +101,14 @@ let of_string str =
   str |> Base.String.to_list |> Base.List.map ~f:Uchar.of_char |> of_list
 ;;
 
+let asymmetric_diff a b =
+  match a, b with
+  | Pos xs, Pos ys -> Pos (Interval_set.diff xs ys)
+  | Neg xs, Neg ys -> Pos (Interval_set.diff ys xs)
+  | Pos xs, Neg ys -> Pos (Interval_set.inter xs ys)
+  | Neg xs, Pos ys -> Neg (Interval_set.union xs ys)
+;;
+
 let negate = function Pos iset -> Neg iset | Neg iset -> Pos iset
 
 let union a b =
@@ -124,6 +132,7 @@ let mem t c =
 ;;
 
 let is_empty = function Pos iset when Interval_set.is_empty iset -> true | _ -> false
+let is_subset a b = inter a b = b
 
 let choose = function
   | Pos iset ->
@@ -215,6 +224,7 @@ module Infix = struct
 
   let ( + ) = union
   let ( * ) = inter
+  let ( - ) = asymmetric_diff
 end
 
 module Laws = Laws.Make (struct
@@ -229,7 +239,7 @@ module Laws = Laws.Make (struct
   let negate = negate
 end)
 
-let%test_module "pp" =
+let%test_module _ =
   (module struct
     let c = of_char 'c'
     let d = of_char 'd'
@@ -313,6 +323,56 @@ let%test_module "pp" =
         false
         true
         true |}]
+    ;;
+
+    let%expect_test "is_subset" =
+      let go a b = is_subset a b |> Fmt.pr "%b@." in
+      go c empty;
+      go c d;
+      go cd d;
+      go c (negate d);
+      go (negate c) d;
+      go (negate c) (negate d);
+      go (negate c) (negate cd);
+      [%expect
+        {|
+        true
+        false
+        true
+        false
+        true
+        false
+        true |}]
+    ;;
+
+    let%expect_test "( - )" =
+      let go a b = asymmetric_diff a b |> Fmt.pr "%a@." pp in
+      go c d;
+      go c cd;
+      go cd d;
+      go c (negate d);
+      go cd (negate d);
+      go c (negate cd);
+      go (negate c) d;
+      go (negate c) cd;
+      go (negate cd) d;
+      go (negate c) (negate d);
+      go (negate c) (negate cd);
+      go (negate cd) (negate c);
+      [%expect
+        {|
+        c
+        []
+        c
+        []
+        d
+        c
+        [^cd]
+        [^cd]
+        [^cd]
+        d
+        d
+        [] |}]
     ;;
   end)
 ;;
