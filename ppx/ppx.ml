@@ -175,17 +175,25 @@ end = struct
       | Peek (cls, k) ->
         (match ctx.next with
         | `EOF -> cdcomp ctx (k `Eof)
-        | `Tok _ ->
+        | `Tok x ->
           if Char_class.(is_empty (inter ctx.values cls))
           then cdcomp ctx (k `No)
-          else failwith "TODO"
+          else (
+            let complete = Char_class.is_subset ctx.values cls in
+            let tags' = Char_class.inter ctx.values cls in
+            test_tag ~complete tags' x (function
+                | None ->
+                  cdcomp { ctx with values = Char_class.Infix.(ctx.values - cls) } (k `No)
+                | Some x -> cdcomp { ctx with values = tags' } (k (`Yes x))))
         | `Unknown ->
           stream_peek ctx.stream_context (fun stream_context -> function
             | None -> cdcomp { ctx with stream_context; next = `EOF } (k `Eof)
             | Some x ->
               test_tag ~complete:false cls x (function
                   | None ->
-                    cdcomp { ctx with values = Char_class.diff ctx.values cls } (k `No)
+                    cdcomp
+                      { ctx with values = Char_class.Infix.(ctx.values - cls) }
+                      (k `No)
                   | Some x ->
                     cdcomp
                       { ctx with values = Char_class.inter ctx.values cls }
