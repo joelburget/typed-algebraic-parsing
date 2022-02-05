@@ -1,0 +1,8 @@
+(library
+ (name typed_algebraic_parsing_regex)
+ (public_name typed_algebraic_parsing.regex)
+ (libraries base diet fmt)
+ (inline_tests)
+ (preprocess
+  (pps ppx_jane))
+ (wrapped false))
