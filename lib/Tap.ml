@@ -308,14 +308,16 @@ module Construction = struct
     let always x _ = x
     let ( ++ ) = seq
     let ( ==> ) p f = map f p
-    let any gs = List.fold_left ~f:alt ~init:bot gs
-    let option r = any [ eps ==> always None; (r ==> fun x -> Some x) ]
+    let choice gs = List.fold_left ~f:alt ~init:bot gs
+    let option r = choice [ eps ==> always None; (r ==> fun x -> Some x) ]
     let plus g = g ++ star g ==> fun (x, xs) -> x :: xs
-    let charset s = any (List.map ~f:chr (String.to_list s))
+    let charset s = choice (List.map ~f:chr (String.to_list s))
     let lower = charset "abcdefghijklmnopqrstuvwxyz"
     let upper = charset "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     let sep_by1 sep p = p ++ star (sep ++ p ==> snd) ==> fun (x, xs) -> x :: xs
     let sep_by sep p = option (sep_by1 sep p) ==> function None -> [] | Some xs -> xs
+    let ( <* ) p1 p2 = p1 ++ p2 ==> fst
+    let ( *> ) p1 p2 = p1 ++ p2 ==> snd
 
     module Sexp = struct
       type sexp =
@@ -333,7 +335,7 @@ module Construction = struct
 
       let sexp =
         fix (fun sexp ->
-            any
+            choice
               [ (word ==> fun sym -> Sym sym)
               ; (paren (sep_by (chr ' ') sexp) ==> fun s -> Seq s)
               ])
@@ -363,21 +365,25 @@ module Construction = struct
 
     module Arith = struct
       let digits = plus (charset "0123456789")
+      let whitespace = star (charset " \t\n")
 
       let num : float t =
-        digits ++ chr '.' ++ digits
+        digits ++ chr '.' ++ option digits
         ==> fun ((digits1, _), digits2) ->
+        let digits2 = Base.Option.value digits2 ~default:[] in
         Float.of_string (String.of_char_list digits1 ^ "." ^ String.of_char_list digits2)
       ;;
+
+      let chr' c = chr c <* whitespace
 
       let arith =
         fix (fun arith ->
             infix
-              [ Right, chr '^' ==> always Stdlib.Float.pow
-              ; Left, chr '*' ==> always Float.( * )
-              ; Left, chr '+' ==> always Float.( + )
+              [ Right, chr' '^' ==> always Stdlib.Float.pow
+              ; Left, chr' '*' ==> always Float.( * )
+              ; Left, chr' '+' ==> always Float.( + )
               ]
-              (any [ num; Sexp.paren arith ]))
+              (choice [ num; Sexp.paren arith ] <* whitespace))
       ;;
     end
   end
@@ -424,7 +430,13 @@ let%test_module _ =
     let parse p = parse (typecheck p) []
 
     let go p pp str =
-      try Fmt.pr "@[%a@]@." pp (parse p (Stream.of_string str)) with
+      let stream = Stream.of_string str in
+      try
+        let parsed = parse p stream in
+        match Stream.peek stream with
+        | None -> Fmt.pr "@[%a@]@." pp parsed
+        | Some _ -> Fmt.pr "@[parsed with leftovers:@ %a@]@." pp parsed
+      with
       | Parse_error msg -> Fmt.pr "failed parse: %s@." msg
     ;;
 
@@ -441,7 +453,7 @@ let%test_module _ =
       go eps (Fmt.any "()") "c";
       [%expect {|
         ()
-        () |}]
+        parsed with leftovers: () |}]
     ;;
 
     let%expect_test "bot" =
@@ -484,8 +496,8 @@ let%test_module _ =
       [%expect "abbb"]
     ;;
 
-    let%expect_test "any, option" =
-      let go' = go (any [ chr 'a'; chr 'b' ]) Fmt.char in
+    let%expect_test "choice, option" =
+      let go' = go (choice [ chr 'a'; chr 'b' ]) Fmt.char in
       go' "a";
       go' "a";
       let go' = go (option (chr 'a')) Fmt.(option char) in
@@ -542,38 +554,31 @@ let%test_module _ =
       [%expect {| [a, b, c] |}]
     ;;
 
-    (* TODO:
-     * Parse more general literals
-     * Without needing parens
-     * Allow whitespace
-     * Check stream has been consumed
-     *)
     let%expect_test "arith" =
-      let go' = go Arith.digits Fmt.(list char) in
-      go' "12";
-      let go' = go (Arith.digits ++ chr '.' ==> fst) Fmt.(list char) in
-      go' "12.";
-      let go' = go (chr '.' ++ Arith.digits ==> snd) Fmt.(list char) in
-      go' ".12";
       let go' = go Arith.num Fmt.float in
       go' "1.2";
       go' "0.1";
       go' "1.0";
+      go' "1.";
       let go' = go Arith.arith Fmt.float in
-      go' "(1.0+2.0)";
-      go' "(1.0*2.0)";
-      go' "(2.0^2.0)";
+      go' "1.0 + 2.0";
+      go' "1.0 * 2.0";
+      go' "2.0 ^ 2.0";
+      go' "1.0 ^ 2.0 + 1.0 * 2.0 ^ 2.0";
+      go' "1.0 ^ (2.0 + 1.0 * 2.0 ^ 2.0)";
+      go' "1.0 ^ 2.0 + (1.0 * 2.0) ^ 2.0";
       [%expect
         {|
-        12
-        12
-        12
         1.2
         0.1
         1
+        1
         3
         2
-        4 |}]
+        4
+        5
+        1
+        5 |}]
     ;;
   end)
 ;;

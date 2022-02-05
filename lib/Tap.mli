@@ -74,7 +74,7 @@ module Construction : sig
 
     val ( ++ ) : 'a t -> 'b t -> ('a * 'b) t
     val ( ==> ) : 'a t -> ('a -> 'b) -> 'b t
-    val any : 'a t list -> 'a t
+    val choice : 'a t list -> 'a t
     val option : 'a t -> 'a option t
     val plus : 'a t -> 'a list t
     val charset : string -> char t
@@ -85,6 +85,8 @@ module Construction : sig
     val infix : (assoc * ('a -> 'a -> 'a) t) list -> 'a t -> 'a t
     val sep_by : 'a t -> 'b t -> 'b list t
     val sep_by1 : 'a t -> 'b t -> 'b list t
+    val ( <* ) : 'a t -> _ t -> 'a t
+    val ( *> ) : _ t -> 'a t -> 'a t
 
     module Sexp : sig
       type sexp =
