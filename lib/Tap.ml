@@ -255,7 +255,7 @@ let rec parse : type ctx a. (ctx, a, Type.t) Grammar.t -> ctx Parse_env.t -> a p
   | Var n -> Parse_env.lookup env n
 ;;
 
-module Hoas = struct
+module Construction = struct
   module Ctx = Env (struct
     type _ t = unit
   end)
@@ -385,7 +385,7 @@ end
 
 let%test_module _ =
   (module struct
-    open Hoas
+    open Construction
     open Library
 
     let mk_gram p = p.tdb []
@@ -417,7 +417,7 @@ let%test_module _ =
          guarded: true} |}]
     ;;
 
-    let typecheck : type a. a Hoas.t -> (unit, a, Type.t) Grammar.t =
+    let typecheck : type a. a Construction.t -> (unit, a, Type.t) Grammar.t =
      fun { tdb } -> Grammar.typeof [] (tdb [])
    ;;
 

@@ -55,7 +55,7 @@ module Parse_env : Env_s
 val typeof : 'ctx Type_env.t -> ('ctx, 'a, 'd) Grammar.t -> Type.t
 val parse : ('ctx, 'a, Type.t) Grammar.t -> 'ctx Parse_env.t -> 'a parser
 
-module Hoas : sig
+module Construction : sig
   type 't t
 
   val eps : unit t
