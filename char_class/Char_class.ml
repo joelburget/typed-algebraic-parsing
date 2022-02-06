@@ -77,18 +77,13 @@ include T
 module C = Base.Comparable.Make (T)
 include C
 
+type element = Uchar.t
+
 let empty = Pos Interval_set.empty
 let any = Neg Interval_set.empty
 let singleton_interval x = Interval_set.Interval.make x x
 let singleton c = Pos (Interval_set.of_interval (singleton_interval c))
-let of_char c = singleton (Uchar.of_char c)
 let range x y = Pos (Interval_set.of_interval (Interval_set.Interval.make x y))
-
-let crange x y =
-  Pos
-    (Interval_set.of_interval
-       (Interval_set.Interval.make (Uchar.of_char x) (Uchar.of_char y)))
-;;
 
 let of_list xs =
   Pos
@@ -239,10 +234,24 @@ module Laws = Laws.Make (struct
   let negate = negate
 end)
 
+module Char = struct
+  type element = char
+
+  let singleton c = singleton (Uchar.of_char c)
+
+  let range x y =
+    Pos
+      (Interval_set.of_interval
+         (Interval_set.Interval.make (Uchar.of_char x) (Uchar.of_char y)))
+  ;;
+
+  let mem t c = mem t (Uchar.of_char c)
+end
+
 let%test_module _ =
   (module struct
-    let c = of_char 'c'
-    let d = of_char 'd'
+    let c = Char.singleton 'c'
+    let d = Char.singleton 'd'
     let cd = of_list Uchar.[ of_char 'c'; of_char 'd' ]
 
     let%expect_test "pp" =
@@ -256,7 +265,7 @@ let%test_module _ =
       go (Neg (singleton (Uchar.of_int 1234)));
       go cd;
       go (negate cd);
-      go (of_char '(');
+      go (Char.singleton '(');
       [%expect
         {|
         []

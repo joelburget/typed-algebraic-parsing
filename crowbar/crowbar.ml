@@ -49,7 +49,7 @@ module Char_class' = struct
           [ const empty
           ; const any
           ; map [ uchar ] singleton
-          ; map [ char ] of_char
+          ; map [ char ] Char.singleton
             (*
         ; map [ uchar; uchar ] (fun a b ->
               if Base.Int.(Uchar.compare a b <= 0)
@@ -57,7 +57,9 @@ module Char_class' = struct
               else Char_class.range b a)
                *)
           ; map [ char; char ] (fun a b ->
-                if Base.Int.(Char.compare a b <= 0) then crange a b else crange b a)
+                if Base.Int.(Base.Char.compare a b <= 0)
+                then Char.range a b
+                else Char.range b a)
           ; map [ list uchar ] of_list (* ; map [ bytes ] of_string *)
           ; map [ gen ] negate
           ; map [ gen; gen ] union

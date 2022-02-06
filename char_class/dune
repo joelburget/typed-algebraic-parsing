@@ -1,0 +1,8 @@
+(library
+ (name typed_algebraic_parsing_char_class)
+ (public_name typed_algebraic_parsing.char_class)
+ (libraries base diet fmt typed_algebraic_parsing_laws)
+ (inline_tests)
+ (preprocess
+  (pps ppx_jane))
+ (wrapped false))

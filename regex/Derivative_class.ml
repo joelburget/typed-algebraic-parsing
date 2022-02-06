@@ -17,7 +17,7 @@ let cross s1 s2 =
 let%test_module _ =
   (module struct
     let go t = Fmt.pr "%a@." pp t
-    let example_a = Set.singleton (module Char_class) (Char_class.of_char 'a')
+    let example_a = Set.singleton (module Char_class) (Char_class.Char.singleton 'a')
     let ac = Char_class.range (Uchar.of_char 'a') (Uchar.of_char 'c')
     let ab = Char_class.range (Uchar.of_char 'a') (Uchar.of_char 'b')
     let de = Char_class.range (Uchar.of_char 'd') (Uchar.of_char 'e')
@@ -41,7 +41,8 @@ let%test_module _ =
       go (cross example_ac example_ac_ef);
       go (cross example_ac_ef example_ac_ef_etc);
       go (cross example_ab_de example_ac_ef_etc);
-      [%expect {|
+      [%expect
+        {|
         {.}
         {.}
         {a}

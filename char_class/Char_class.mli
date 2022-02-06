@@ -7,6 +7,8 @@
     operations [union] and [inter], and negation. *)
 type t
 
+type element = Uchar.t
+
 include Base.Comparable.S with type t := t
 include Base.Sexpable.S with type t := t
 
@@ -26,6 +28,7 @@ end
 module Laws : Laws.S with type t = t
 
 val pp : t Fmt.t
+val pp_char : Uchar.t Fmt.t
 
 (** The empty character class [\[\]] *)
 val empty : t
@@ -36,14 +39,8 @@ val any : t
 (** A single unicode character. *)
 val singleton : Uchar.t -> t
 
-(** A single (ASCII) character. *)
-val of_char : char -> t
-
 (** Inclusive range. *)
 val range : Uchar.t -> Uchar.t -> t
-
-(** Inclusive range. *)
-val crange : char -> char -> t
 
 (** Any of the characters in the list. *)
 val of_list : Uchar.t list -> t
@@ -82,3 +79,16 @@ val choose : t -> Uchar.t option
 
 (** Choose any character from this class. *)
 val choose_exn : t -> Uchar.t
+
+module Char : sig
+  type element = char
+
+  (** A single (ASCII) character. *)
+  val singleton : char -> t
+
+  (** Inclusive range. *)
+  val range : char -> char -> t
+
+  (** Is the character contained in this class? *)
+  val mem : t -> char -> bool
+end
