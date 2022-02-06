@@ -1,7 +1,9 @@
 open Base
 
 module Tap (Token_stream : Signatures.Token_stream) :
-  Parser.S with type token = Token_stream.token = struct
+  Signatures.Parser
+    with type token = Token_stream.token
+     and type stream = Token_stream.Stream.t = struct
   module Token = Token_stream.Token
   module Stream = Token_stream.Stream
 
@@ -349,7 +351,7 @@ module Tap (Token_stream : Signatures.Token_stream) :
   end
 end
 
-module Uchar_token_stream : Signatures.Token_stream with type token = Uchar.t = struct
+module Uchar_token_stream = struct
   type token = Uchar.t
   type stream = char Stdlib.Stream.t
 
@@ -366,14 +368,22 @@ module Uchar_token_stream : Signatures.Token_stream with type token = Uchar.t = 
 
     let peek t = Stdlib.Stream.peek t |> Option.map ~f:Uchar.of_char
     let junk = Stdlib.Stream.junk
-    let of_string = Stdlib.Stream.of_string
   end
 end
 
-module String = struct
+module String :
+  Signatures.String_parsers
+    with type token = Uchar_token_stream.token
+     and type stream = Uchar_token_stream.Stream.t = struct
   include Tap (Uchar_token_stream)
   open Construction
   open Library
+
+  module Stream = struct
+    include Stream
+
+    let of_string = Stdlib.Stream.of_string
+  end
 
   let ctok c = tok (Uchar.of_char c)
   let charset s = s |> String.to_list |> List.map ~f:ctok |> choice
