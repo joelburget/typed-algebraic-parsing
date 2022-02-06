@@ -351,31 +351,11 @@ module Tap (Token_stream : Signatures.Token_stream) :
   end
 end
 
-module Uchar_token_stream = struct
-  type token = Uchar.t
-  type stream = char Stdlib.Stream.t
-
-  module Token = struct
-    include Base.Uchar
-    module Set = Char_class
-
-    let pp = Char_class.pp_char
-  end
-
-  module Stream = struct
-    type element = Uchar.t
-    type t = stream
-
-    let peek t = Stdlib.Stream.peek t |> Option.map ~f:Uchar.of_char
-    let junk = Stdlib.Stream.junk
-  end
-end
-
 module String :
   Signatures.String_parsers
-    with type token = Uchar_token_stream.token
-     and type stream = Uchar_token_stream.Stream.t = struct
-  include Tap (Uchar_token_stream)
+    with type token = Token_streams.Uchar.token
+     and type stream = Token_streams.Uchar.Stream.t = struct
+  include Tap (Token_streams.Uchar)
   open Construction
   open Library
 
