@@ -362,7 +362,7 @@ module String :
   module Stream = struct
     include Stream
 
-    let of_string = Stdlib.Stream.of_string
+    let of_string str = Token_streams.Uchar.of_decoder (Uutf.decoder (`String str))
   end
 
   let ctok c = tok (Uchar.of_char c)
@@ -480,6 +480,11 @@ let%test_module _ =
       [%expect {|
         c
         failed parse: Unexpected token 'd' (expected 'c') |}]
+    ;;
+
+    let%expect_test "unicode tok" =
+      go (tok (Stdlib.Uchar.of_int 0x1F3C1)) Token.pp "🏁";
+      [%expect {| \u1F3C1 |}]
     ;;
 
     let%expect_test "eps" =

@@ -1,6 +1,8 @@
 module Uchar = struct
   type token = Uchar.t
-  type stream = char Stdlib.Stream.t
+  type stream = (Uutf.decoder * Uchar.t option) ref
+
+  let of_decoder decoder = ref (decoder, None)
 
   module Token = struct
     include Base.Uchar
@@ -13,8 +15,33 @@ module Uchar = struct
     type element = Uchar.t
     type t = stream
 
-    let peek t = Stdlib.Stream.peek t |> Base.Option.map ~f:Uchar.of_char
-    let junk = Stdlib.Stream.junk
+    let decode_char decoder =
+      match Uutf.decode decoder with
+      | `Uchar c -> Some c
+      | `Await | `End | `Malformed _ -> None
+    ;;
+
+    let peek ref =
+      let decoder, char_opt = !ref in
+      match char_opt with
+      | Some c -> Some c
+      | None ->
+        decode_char decoder
+        |> Base.Option.map ~f:(fun c ->
+               ref := decoder, Some c;
+               c)
+    ;;
+
+    let junk ref =
+      let decoder, char_opt = !ref in
+      match char_opt with
+      | Some _ ->
+        ref := decoder, None;
+        ()
+      | None ->
+        let (_ : Uchar.t option) = decode_char decoder in
+        ()
+    ;;
   end
 end
 

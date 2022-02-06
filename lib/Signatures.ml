@@ -142,7 +142,8 @@ module type Parser = sig
 end
 
 module type String_parsers = sig
-  include Parser with type token = Uchar.t and type stream = char Stdlib.Stream.t
+  include
+    Parser with type token = Uchar.t and type stream = (Uutf.decoder * Uchar.t option) ref
 
   module Stream : sig
     include Stream with type element = token and type t = stream

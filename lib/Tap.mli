@@ -6,4 +6,4 @@ module Tap (Token_stream : Signatures.Token_stream) :
 module String :
   Signatures.String_parsers
     with type token = Uchar.t
-     and type stream = char Stdlib.Stream.t
+     and type stream = (Uutf.decoder * Uchar.t option) ref
