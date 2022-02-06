@@ -1,60 +1,8 @@
 module type S = sig
   type t
 
-  module Ring : sig
-    (** [(a + b) + c = a + (b + c)] *)
-    val plus_associative : t -> t -> t -> bool
-
-    (** [a + b = b + a] *)
-    val plus_commutative : t -> t -> bool
-
-    (** [a + 0 = a] *)
-    val plus_ident : t -> bool
-
-    (** [a * (-a) = 0] *)
-    val mul_inverse : t -> bool
-
-    (** [(a * b) * c = a * (b * c)] *)
-    val mul_associative : t -> t -> t -> bool
-
-    (** [a * b = b * a] *)
-    val mul_commutative : t -> t -> bool
-
-    (** [a * 1 = a] *)
-    val mul_ident : t -> bool
-
-    (** [a * (b + c) = (a * b) + (a * c)] *)
-    val left_distributive : t -> t -> t -> bool
-
-    (** [(b + c) * a = (b * a) + (c * a)] *)
-    val right_distributive : t -> t -> t -> bool
-  end
-
-  module Lattice : sig
-    (** [a + a = a] *)
-    val idempotent_union : t -> bool
-
-    (** [a * a = a] *)
-    val idempotent_inter : t -> bool
-
-    (** [a + 0 = a] *)
-    val join_bot : t -> bool
-
-    (** [a * 1 = a] *)
-    val meet_top : t -> bool
-
-    (** [a + (a * b) = a] *)
-    val absorption_1 : t -> t -> bool
-
-    (** [a * (a + b) = a] *)
-    val absorption_2 : t -> t -> bool
-
-    (** [a + (b * c) = (a + b) * (a + c)] *)
-    val distribute_over_union : t -> t -> t -> bool
-
-    (** [a * (b + c) = (a * b) + (a * c)] *)
-    val distribute_over_inter : t -> t -> t -> bool
-  end
+  module Ring : Ring.Laws with type t := t
+  module Lattice : Lattice.Laws with type t := t
 
   (** [-(-a) = a] *)
   val double_negation : t -> bool
