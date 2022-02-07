@@ -3,12 +3,9 @@ module type S = sig
 
   val additive_ident : t
   val multiplicative_ident : t
-
-  module Infix : sig
-    val ( = ) : t -> t -> bool
-    val ( + ) : t -> t -> t
-    val ( * ) : t -> t -> t
-  end
+  val ( = ) : t -> t -> bool
+  val ( + ) : t -> t -> t
+  val ( * ) : t -> t -> t
 end
 
 module type Laws = sig

@@ -1,8 +1,8 @@
 module type S = sig
   type t
 
-  module Ring : Ring.Laws with type t := t
-  module Lattice : Lattice.Laws with type t := t
+  module Ring : Ring_like.Laws with type t := t
+  module Lattice : Lattice_like.Lattice_laws with type t := t
 
   (** [-(-a) = a] *)
   val double_negation : t -> bool
@@ -21,7 +21,7 @@ module Make (T : sig
 
   val additive_ident : t
   val multiplicative_ident : t
-  val bottom : t
+  val bot : t
   val top : t
   val negate : t -> t
 end) =
@@ -74,9 +74,15 @@ struct
   end
 
   module Lattice = struct
-    let idempotent_union a = mk1 a (a + a) a
-    let idempotent_inter a = mk1 a (a * a) a
-    let join_bot a = mk1 a (a + bottom) a
+    let top = top
+    let bot = bot
+    let meet_associative a b c = mk3 a b c (a * b * c) (a * (b * c))
+    let meet_commutative a b = mk2 a b (a * b) (b * a)
+    let meet_idempotent a = mk1 a (a * a) a
+    let join_associative a b c = mk3 a b c (a + b + c) (a + (b + c))
+    let join_commutative a b = mk2 a b (a + b) (b + a)
+    let join_idempotent a = mk1 a (a + a) a
+    let join_bot a = mk1 a (a + bot) a
     let meet_top a = mk1 a (a * top) a
     let absorption_1 a b = mk2 a b (a + (a * b)) a
     let absorption_2 a b = mk2 a b (a * (a + b)) a
