@@ -193,7 +193,7 @@ module Laws = Laws.Make (struct
   let pp = pp
   let additive_ident = empty
   let multiplicative_ident = any
-  let bottom = empty
+  let bot = empty
   let top = any
   let negate = complement
 end)
