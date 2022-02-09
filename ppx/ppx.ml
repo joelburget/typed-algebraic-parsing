@@ -15,6 +15,11 @@ module Ir (Ast : Ast_builder.S) : sig
 
   module Codegen : sig
     val generate : 'a t -> expression
+
+    val generate_ir
+      :  'ctx Tap.String.Parse_env.t
+      -> ('ctx, 'a, Tap.String.Type.t) Tap.String.Grammar.t
+      -> 'a t
   end
 end = struct
   let loc = Ast.loc
@@ -219,24 +224,101 @@ end = struct
           let ctx = { stream_context; next = `Unknown; values = Char_class.any } in
           cdcomp ctx expr)
    ;;
+
+    module Parser = Tap.String
+    open Parser
+
+    let tok c =
+      peek c
+      @@ function
+      | `Eof -> fail "Expected tok"
+      | `Yes c -> junk >>= fun _ -> return c
+      | `No -> Stdlib.Printf.kprintf fail "wrong token"
+    ;;
+
+    let alt _ _ _ _ = failwith "TODO"
+    let seq p1 p2 = p1 >>= fun a -> p2 >>= fun b -> return [%expr [%e a], [%e b]]
+    let map f p = p >>= fun x -> return (f x)
+    let star tp g = failwith "TODO"
+
+    type _ code = expression
+
+    let rec generate_ir : type ctx a. ctx Parse_env.t -> (ctx, a, Type.t) Grammar.t -> a t
+      =
+     fun ctx (_, grammar) ->
+      let data (d, _) = d in
+      match grammar with
+      | Grammar.Eps expr -> return expr
+      | Seq (g1, g2) ->
+        let p1 = generate_ir ctx g1 in
+        let p2 = generate_ir ctx g2 in
+        seq p1 p2
+      | Tok t -> tok (Char_class.singleton t)
+      | Bot -> return [%expr failwith "impossible"]
+      | Alt (g1, g2) ->
+        let p1 = generate_ir ctx g1 in
+        let p2 = generate_ir ctx g2 in
+        alt (data g1) p1 (data g2) p2
+      | Map (f, g) -> map f (generate_ir ctx g)
+      | Fix g -> fix (fun p -> generate_ir g (p :: ctx))
+      | Star g1 ->
+        let p1 = generate_ir ctx g1 in
+        star (data g1) p1
+      | Var n -> Parse_env.lookup ctx n
+   ;;
   end
 end
+
+let expand_parser ~loc ~path:_ expr =
+  let module Ast =
+    Ast_builder.Make (struct
+      let loc = loc
+    end)
+  in
+  let module Ir' = Ir (Ast) in
+  let module Codegen = Ir'.Codegen in
+  let module Parser = Tap.String in
+  let open Parser in
+  let module Expander = struct
+    open Ir'
+
+    type 'a typechecked = (unit, 'a, Type.t) Grammar.t
+
+    (*
+    let bot _ = return [%expr failwith "Impossible"]
+    let eps = return
+    *)
+
+    let typecheck : 'a Construction.t -> 'a typechecked =
+     fun { tdb } -> Grammar.typeof Type_env.[] (tdb Construction.Ctx.[])
+   ;;
+
+    let reflect : expression -> 'a Construction.t =
+     fun { pexp_desc; _ } ->
+      let open Construction in
+      match pexp_desc with
+      | Pexp_ident { txt; loc = _ } ->
+        (match txt with
+        | Lident "bot" -> bot
+        | Lident "eps" -> eps
+        | _ -> failwith "TODO")
+      | Pexp_apply _ -> failwith "TODO"
+      | _ -> failwith "TODO"
+   ;;
+
+    let ir_of_expr expr = expr |> reflect |> typecheck |> Codegen.generate_ir Parse_env.[]
+  end
+  in
+  let ir : _ Ir'.t = Expander.ir_of_expr expr in
+  Codegen.generate ir
+;;
 
 let term_extension =
   Extension.declare
     "parser"
     Extension.Context.Expression
     Ast_pattern.(single_expr_payload __)
-    (fun ~loc ~path:_ _expr ->
-      let module Ast =
-        Ast_builder.Make (struct
-          let loc = loc
-        end)
-      in
-      let module Ir' = Ir (Ast) in
-      let module Codegen = Ir'.Codegen in
-      let ir : _ Ir'.t = failwith "TODO" in
-      Codegen.generate ir)
+    expand_parser
 ;;
 
 let () =

@@ -96,7 +96,18 @@ module type Parser = sig
   module Parse_env : Env_s
 
   module Grammar : sig
-    type ('ctx, 't, 'd) t
+    type ('ctx, 'a, 'd) t' =
+      | Eps : 'a -> ('ctx, 'a, 'd) t'
+      | Seq : ('ctx, 'a, 'd) t * ('ctx, 'b, 'd) t -> ('ctx, 'a * 'b, 'd) t'
+      | Tok : Token.t -> ('ctx, Token.t, 'd) t'
+      | Bot : ('ctx, 'a, 'd) t'
+      | Alt : ('ctx, 'a, 'd) t * ('ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
+      | Map : ('a -> 'b) * ('ctx, 'a, 'd) t -> ('ctx, 'b, 'd) t'
+      | Fix : ('a * 'ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
+      | Star : ('ctx, 'a, 'd) t -> ('ctx, 'a list, 'd) t'
+      | Var : ('ctx, 'a) Var.t -> ('ctx, 'a, 'd) t'
+
+    and ('ctx, 'a, 'd) t = 'd * ('ctx, 'a, 'd) t'
 
     val typeof : 'ctx Type_env.t -> ('ctx, 'a, 'd) t -> ('ctx, 'a, Type.t) t
   end
