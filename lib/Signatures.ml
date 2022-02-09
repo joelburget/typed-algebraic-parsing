@@ -60,7 +60,7 @@ module type Parser = sig
   end
 
   module Parse : sig
-    val eps : unit parser
+    val eps : 'a -> 'a parser
     val tok : token -> token parser
     val bot : _ parser
     val seq : 'a parser -> 'b parser -> ('a * 'b) parser
@@ -110,7 +110,7 @@ module type Parser = sig
     (* TODO: don't expose this type *)
     type 'a t = { tdb : 'ctx. 'ctx Ctx.t -> ('ctx, 'a, unit) Grammar.t }
 
-    val eps : unit t
+    val eps : 'a -> 'a t
     val tok : token -> token t
     val bot : 'a t
     val seq : 'a t -> 'b t -> ('a * 'b) t

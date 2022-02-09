@@ -91,7 +91,7 @@ module Tap (Token_stream : Signatures.Token_stream) :
   module Parse = struct
     open Type
 
-    let eps _s = ()
+    let eps a _s = a
 
     let tok c s =
       match Stream.peek s with
@@ -187,7 +187,7 @@ module Tap (Token_stream : Signatures.Token_stream) :
 
   module Grammar = struct
     type ('ctx, 'a, 'd) t' =
-      | Eps : ('ctx, unit, 'd) t'
+      | Eps : 'a -> ('ctx, 'a, 'd) t'
       | Seq : ('ctx, 'a, 'd) t * ('ctx, 'b, 'd) t -> ('ctx, 'a * 'b, 'd) t'
       | Tok : Token.t -> ('ctx, Token.t, 'd) t'
       | Bot : ('ctx, 'a, 'd) t'
@@ -205,7 +205,7 @@ module Tap (Token_stream : Signatures.Token_stream) :
      fun env (_, g) ->
       let data = data in
       match g with
-      | Eps -> Type.eps, Eps
+      | Eps a -> Type.eps, Eps a
       | Seq (g1, g2) ->
         let env' = Type_env.map { f = (fun ty -> { ty with guarded = true }) } env in
         let g1 = typeof env g1 in
@@ -239,7 +239,7 @@ module Tap (Token_stream : Signatures.Token_stream) :
     let data = Grammar.data in
     let open Parse in
     match g with
-    | Eps -> eps
+    | Eps a -> eps a
     | Seq (g1, g2) ->
       let p1 = parse g1 env in
       let p2 = parse g2 env in
@@ -294,7 +294,7 @@ module Tap (Token_stream : Signatures.Token_stream) :
      fun c1 c2 -> tshift' (len c1 - len c2) c1 c2
    ;;
 
-    let eps = { tdb = (fun _ -> (), Eps) }
+    let eps a = { tdb = (fun _ -> (), Eps a) }
     let tok c = { tdb = (fun _ -> (), Tok c) }
     let bot = { tdb = (fun _ -> (), Bot) }
     let seq f g = { tdb = (fun ctx -> (), Seq (f.tdb ctx, g.tdb ctx)) }
@@ -320,7 +320,7 @@ module Tap (Token_stream : Signatures.Token_stream) :
       let ( ++ ) = seq
       let ( ==> ) p f = map f p
       let choice gs = List.fold_left ~f:alt ~init:bot gs
-      let option r = choice [ eps ==> always None; (r ==> fun x -> Some x) ]
+      let option r = choice [ eps None; (r ==> fun x -> Some x) ]
       let plus g = g ++ star g ==> fun (x, xs) -> x :: xs
       let sep_by1 sep p = p ++ star (sep ++ p ==> snd) ==> fun (x, xs) -> x :: xs
       let sep_by sep p = option (sep_by1 sep p) ==> function None -> [] | Some xs -> xs
@@ -433,7 +433,7 @@ let%test_module _ =
     let go ty = Fmt.pr "%a@." Type.pp (typeof' ty)
 
     let%expect_test "typechecking" =
-      go eps;
+      go (eps ());
       go (ctok 'a');
       go bot;
       go upper;
@@ -488,8 +488,8 @@ let%test_module _ =
     ;;
 
     let%expect_test "eps" =
-      go eps (Fmt.any "()") "";
-      go eps (Fmt.any "()") "c";
+      go (eps ()) (Fmt.any "()") "";
+      go (eps ()) (Fmt.any "()") "c";
       [%expect {|
         ()
         parsed with leftovers: () |}]
