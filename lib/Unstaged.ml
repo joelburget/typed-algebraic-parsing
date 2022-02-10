@@ -1,6 +1,7 @@
 open Base
+open Prelude
 
-module Tap (Token_stream : Signatures.Token_stream) :
+module Make (Token_stream : Signatures.Token_stream) :
   Signatures.Parser
     with type token = Token_stream.token
      and type stream = Token_stream.Stream.t = struct
@@ -10,10 +11,6 @@ module Tap (Token_stream : Signatures.Token_stream) :
   type token = Token.t
   type stream = Token_stream.stream
   type 'a parser = Stream.t -> 'a
-
-  exception Parse_error of string
-
-  let error fmt = Stdlib.Format.kasprintf (fun str -> raise (Parse_error str)) fmt
 
   module Type = struct
     type t =
@@ -95,16 +92,16 @@ module Tap (Token_stream : Signatures.Token_stream) :
 
     let tok c s =
       match Stream.peek s with
-      | None -> error "Unexpected end of stream"
+      | None -> parse_error "Unexpected end of stream"
       | Some c' ->
         if Token.(c' = c)
         then (
           Stream.junk s;
           c)
-        else error "Unexpected token '%a' (expected '%a')" Token.pp c' Token.pp c
+        else parse_error "Unexpected token '%a' (expected '%a')" Token.pp c' Token.pp c
     ;;
 
-    let bot _ = error "bottom"
+    let bot _ = parse_error "bottom"
 
     let seq p1 p2 s =
       let a = p1 s in
@@ -121,7 +118,7 @@ module Tap (Token_stream : Signatures.Token_stream) :
         then p1 s
         else if tp2.null
         then p2 s
-        else error "Unexpected end of stream"
+        else parse_error "Unexpected end of stream"
       | Some c ->
         if Token.Set.mem tp1.first c
         then p1 s
@@ -131,50 +128,8 @@ module Tap (Token_stream : Signatures.Token_stream) :
         then p1 s
         else if tp2.null
         then p2 s
-        else error "No progress possible"
+        else parse_error "No progress possible"
     ;;
-  end
-
-  module Var = struct
-    type ('ctx, 'a) t =
-      | Z : ('a * 'ctx, 'a) t
-      | S : ('rest, 'a) t -> ('b * 'rest, 'a) t
-  end
-
-  module type Env_s = sig
-    type 'a elem_t
-
-    type 'ctx t =
-      | [] : unit t
-      | ( :: ) : 'a elem_t * 'ctx t -> ('a * 'ctx) t
-
-    val lookup : 'ctx t -> ('ctx, 'a) Var.t -> 'a elem_t
-
-    type fn = { f : 'a. 'a elem_t -> 'a elem_t }
-
-    val map : fn -> 'ctx t -> 'ctx t
-  end
-
-  module Env (T : sig
-    type 'a t
-  end) =
-  struct
-    type 'a elem_t = 'a T.t
-
-    type 'ctx t =
-      | [] : unit t
-      | ( :: ) : 'a T.t * 'ctx t -> ('a * 'ctx) t
-
-    let rec lookup : type ctx a. ctx t -> (ctx, a) Var.t -> a T.t =
-     fun ctx v ->
-      match ctx, v with x :: _, Z -> x | _ :: xs, S v -> lookup xs v | _ -> .
-   ;;
-
-    type fn = { f : 'a. 'a T.t -> 'a T.t }
-
-    let rec map : type ctx. fn -> ctx t -> ctx t =
-     fun { f } -> function [] -> [] | x :: xs -> f x :: map { f } xs
-   ;;
   end
 
   module Type_env = Env (struct
@@ -355,7 +310,7 @@ module String :
   Signatures.String_parsers
     with type token = Token_streams.Uchar.token
      and type stream = Token_streams.Uchar.Stream.t = struct
-  include Tap (Token_streams.Uchar)
+  include Make (Token_streams.Uchar)
   open Construction
   open Library
 

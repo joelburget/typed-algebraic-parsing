@@ -17,8 +17,8 @@ module Ir (Ast : Ast_builder.S) : sig
     val generate : 'a t -> expression
 
     val generate_ir
-      :  'ctx Tap.String.Parse_env.t
-      -> ('ctx, 'a, Tap.String.Type.t) Tap.String.Grammar.t
+      :  'ctx Unstaged.String.Parse_env.t
+      -> ('ctx, 'a, Unstaged.String.Type.t) Unstaged.String.Grammar.t
       -> 'a t
   end
 end = struct
@@ -225,7 +225,7 @@ end = struct
           cdcomp ctx expr)
    ;;
 
-    module Parser = Tap.String
+    module Parser = Unstaged.String
     open Parser
 
     let tok c =
@@ -277,7 +277,7 @@ let expand_parser ~loc ~path:_ expr =
   in
   let module Ir' = Ir (Ast) in
   let module Codegen = Ir'.Codegen in
-  let module Parser = Tap.String in
+  let module Parser = Unstaged.String in
   let open Parser in
   let module Expander = struct
     open Ir'
