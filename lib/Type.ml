@@ -29,7 +29,6 @@ struct
     && Bool.(t1.null = t2.null && t1.guarded = t2.guarded)
   ;;
 
-  let check b msg = if not b then failwith msg
   let empty = Token.Set.empty
   let singleton = Token.Set.singleton
   let ( ==> ) b cs = if b then cs else empty
@@ -43,7 +42,9 @@ struct
   ;;
 
   let alt t1 t2 =
-    check (apart t1 t2) (Fmt.str "alt must be apart @[(%a@ vs@ %a)@]" pp t1 pp t2);
+    Prelude.assert'
+      (apart t1 t2)
+      (Fmt.str "alt must be apart @[(%a@ vs@ %a)@]" pp t1 pp t2);
     { first = Token.Set.union t1.first t2.first
     ; flast = Token.Set.union t1.flast t2.flast
     ; null = t1.null || t2.null
@@ -52,7 +53,9 @@ struct
   ;;
 
   let seq t1 t2 =
-    check (separable t1 t2) (Fmt.str "seq must be separable @[(%a@ vs@ %a)@]" pp t1 pp t2);
+    Prelude.assert'
+      (separable t1 t2)
+      (Fmt.str "seq must be separable @[(%a@ vs@ %a)@]" pp t1 pp t2);
     { first = t1.first
     ; flast = Token.Set.union t2.flast (t2.null ==> Token.Set.union t2.first t1.flast)
     ; null = false

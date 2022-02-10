@@ -106,7 +106,7 @@ module Make (Token_stream : Signatures.Token_stream) :
         data g, Map (f, g)
       | Fix g ->
         let ty = Type.fix (fun ty -> data (typeof (ty :: env) g)) in
-        Type.check ty.Type.guarded "fix must be guarded";
+        assert' ty.Type.guarded "fix must be guarded";
         let g = typeof (ty :: env) g in
         data g, Fix g
       | Star g ->

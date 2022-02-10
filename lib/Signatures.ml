@@ -49,7 +49,6 @@ module type Type = sig
     ; guarded : bool
     }
 
-  val check : bool -> string -> unit
   val pp : t Fmt.t
   val bot : t
   val eps : t

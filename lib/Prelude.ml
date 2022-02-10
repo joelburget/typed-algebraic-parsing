@@ -28,3 +28,5 @@ struct
    fun { f } -> function [] -> [] | x :: xs -> f x :: map { f } xs
  ;;
 end
+
+let assert' b msg = if not b then failwith msg
