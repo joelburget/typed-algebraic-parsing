@@ -102,6 +102,24 @@ module type Grammar = sig
   val typeof : 'ctx type_env -> ('ctx, 'a, 'd) t -> ('ctx, 'a, type_) t
 end
 
+module type Construction = sig
+  type 'a ctx
+  type ('ctx, 'a, 'd) grammar
+  type token
+
+  (* TODO: don't expose this type *)
+  type 'a t = { tdb : 'ctx. 'ctx ctx -> ('ctx, 'a, unit) grammar }
+
+  val eps : 'a -> 'a t
+  val tok : token -> token t
+  val bot : 'a t
+  val seq : 'a t -> 'b t -> ('a * 'b) t
+  val alt : 'a t -> 'a t -> 'a t
+  val map : ('a -> 'b) -> 'a t -> 'b t
+  val fix : ('b t -> 'b t) -> 'b t
+  val star : 'a t -> 'a list t
+end
+
 module type Library = sig
   type 'a t
 
@@ -122,26 +140,6 @@ module type Library = sig
   val sep_by1 : 'a t -> 'b t -> 'b list t
   val ( <* ) : 'a t -> _ t -> 'a t
   val ( *> ) : _ t -> 'a t -> 'a t
-end
-
-module type Construction = sig
-  type 'a ctx
-  type ('ctx, 'a, 'd) grammar
-  type token
-
-  (* TODO: don't expose this type *)
-  type 'a t = { tdb : 'ctx. 'ctx ctx -> ('ctx, 'a, unit) grammar }
-
-  val eps : 'a -> 'a t
-  val tok : token -> token t
-  val bot : 'a t
-  val seq : 'a t -> 'b t -> ('a * 'b) t
-  val alt : 'a t -> 'a t -> 'a t
-  val map : ('a -> 'b) -> 'a t -> 'b t
-  val fix : ('b t -> 'b t) -> 'b t
-  val star : 'a t -> 'a list t
-
-  module Library : Library with type 'a t := 'a t
 end
 
 module type Parser = sig
@@ -168,18 +166,20 @@ module type Parser = sig
 
     include
       Construction
-        with type 'a ctx := 'a Ctx.t
-         and type ('ctx, 'a, 'd) grammar := ('ctx, 'a, 'd) Grammar.t
-         and type token := Token.t
+        with type 'a ctx = 'a Ctx.t
+         and type ('ctx, 'a, 'd) grammar = ('ctx, 'a, 'd) Grammar.t
+         and type token = Token.t
   end
 
   val typeof : 'ctx Type_env.t -> ('ctx, 'a, 'd) Grammar.t -> Type.t
   val parse : ('ctx, 'a, Type.t) Grammar.t -> 'ctx Parse_env.t -> 'a parser
 end
 
-module type String_parsers = sig
+module type String_parser = sig
   include
     Parser with type token = Uchar.t and type stream = (Uutf.decoder * Uchar.t option) ref
+
+  module Library : Library with type 'a t := 'a Construction.t
 
   module Stream : sig
     include Stream with type element = Token.t and type t = stream
