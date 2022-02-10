@@ -40,13 +40,20 @@ end
 
 (** The type of parsers. *)
 module type Type = sig
-  type t
-  type token
+  module Token : Token
 
+  type t =
+    { first : Token.Set.t
+    ; flast : Token.Set.t
+    ; null : bool
+    ; guarded : bool
+    }
+
+  val check : bool -> string -> unit
   val pp : t Fmt.t
   val bot : t
   val eps : t
-  val tok : token -> t
+  val tok : Token.t -> t
   val alt : t -> t -> t
   val seq : t -> t -> t
   val star : t -> t
@@ -141,7 +148,7 @@ module type Parser = sig
 
   module Token : Token with type t = token
   module Stream : Stream with type element = Token.t and type t = stream
-  module Type : Type with type token := Token.t
+  module Type : Type with module Token = Token
 
   module Parse :
     Parse
