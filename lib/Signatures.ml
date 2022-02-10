@@ -102,6 +102,28 @@ module type Grammar = sig
   val typeof : 'ctx type_env -> ('ctx, 'a, 'd) t -> ('ctx, 'a, type_) t
 end
 
+module type Library = sig
+  type 'a t
+
+  type assoc =
+    | Left
+    | Right
+
+  val always : 'a -> 'b -> 'a
+  val ( ++ ) : 'a t -> 'b t -> ('a * 'b) t
+  val ( ==> ) : 'a t -> ('a -> 'b) -> 'b t
+  val choice : 'a t list -> 'a t
+  val option : 'a t -> 'a option t
+  val plus : 'a t -> 'a list t
+  val infixr : ('a -> 'a -> 'a) t -> 'a t -> 'a t
+  val infixl : ('a -> 'a -> 'a) t -> 'a t -> 'a t
+  val infix : (assoc * ('a -> 'a -> 'a) t) list -> 'a t -> 'a t
+  val sep_by : 'a t -> 'b t -> 'b list t
+  val sep_by1 : 'a t -> 'b t -> 'b list t
+  val ( <* ) : 'a t -> _ t -> 'a t
+  val ( *> ) : _ t -> 'a t -> 'a t
+end
+
 module type Construction = sig
   type 'a ctx
   type ('ctx, 'a, 'd) grammar
@@ -119,25 +141,7 @@ module type Construction = sig
   val fix : ('b t -> 'b t) -> 'b t
   val star : 'a t -> 'a list t
 
-  module Library : sig
-    type assoc =
-      | Left
-      | Right
-
-    val always : 'a -> 'b -> 'a
-    val ( ++ ) : 'a t -> 'b t -> ('a * 'b) t
-    val ( ==> ) : 'a t -> ('a -> 'b) -> 'b t
-    val choice : 'a t list -> 'a t
-    val option : 'a t -> 'a option t
-    val plus : 'a t -> 'a list t
-    val infixr : ('a -> 'a -> 'a) t -> 'a t -> 'a t
-    val infixl : ('a -> 'a -> 'a) t -> 'a t -> 'a t
-    val infix : (assoc * ('a -> 'a -> 'a) t) list -> 'a t -> 'a t
-    val sep_by : 'a t -> 'b t -> 'b list t
-    val sep_by1 : 'a t -> 'b t -> 'b list t
-    val ( <* ) : 'a t -> _ t -> 'a t
-    val ( *> ) : _ t -> 'a t -> 'a t
-  end
+  module Library : Library with type 'a t := 'a t
 end
 
 module type Parser = sig
