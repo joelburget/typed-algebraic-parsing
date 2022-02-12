@@ -1,6 +1,6 @@
 open Base
 
-module Make (Construction : Signatures.Construction) = struct
+module Make (Construction : Signatures.Construction with type 'a v = 'a) = struct
   open Construction
 
   type assoc =

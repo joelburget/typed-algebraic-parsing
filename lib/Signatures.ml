@@ -61,16 +61,16 @@ end
 
 (** Constructing parsers. *)
 module type Parse = sig
-  type 'a parser
+  type 'a t
   type token
   type type_
 
-  val eps : 'a -> 'a parser
-  val tok : token -> token parser
-  val bot : _ parser
-  val seq : 'a parser -> 'b parser -> ('a * 'b) parser
-  val alt : type_ -> 'a parser -> type_ -> 'a parser -> 'a parser
-  val map : ('a -> 'b) -> 'a parser -> 'b parser
+  val eps : 'a -> 'a t
+  val tok : token -> token t
+  val bot : _ t
+  val seq : 'a t -> 'b t -> ('a * 'b) t
+  val alt : type_ -> 'a t -> type_ -> 'a t -> 'a t
+  val map : ('a -> 'b) -> 'a t -> 'b t
 end
 
 (** A [Var]-indexed set of elements. *)
@@ -107,15 +107,18 @@ module type Construction = sig
   type ('ctx, 'a, 'd) grammar
   type token
 
+  (** Values produced by parsers *)
+  type 'a v
+
   (* TODO: don't expose this type *)
   type 'a t = { tdb : 'ctx. 'ctx ctx -> ('ctx, 'a, unit) grammar }
 
-  val eps : 'a -> 'a t
+  val eps : 'a v -> 'a t
   val tok : token -> token t
   val bot : 'a t
   val seq : 'a t -> 'b t -> ('a * 'b) t
   val alt : 'a t -> 'a t -> 'a t
-  val map : ('a -> 'b) -> 'a t -> 'b t
+  val map : ('a v -> 'b v) -> 'a t -> 'b t
   val fix : ('b t -> 'b t) -> 'b t
   val star : 'a t -> 'a list t
 end
@@ -145,18 +148,12 @@ end
 module type Parser = sig
   type token
   type stream
-  type 'a parser = stream -> 'a
+  type 'a parser
+  type 'a v
 
   module Token : Token with type t = token
   module Stream : Stream with type element = Token.t and type t = stream
   module Type : Type with module Token = Token
-
-  module Parse :
-    Parse
-      with type 'a parser := 'a parser
-       and type token := Token.t
-       and type type_ := Type.t
-
   module Type_env : Env
   module Parse_env : Env
   module Grammar : Grammar with type 'a type_env := 'a Type_env.t and type type_ := Type.t
@@ -169,15 +166,18 @@ module type Parser = sig
         with type 'a ctx = 'a Ctx.t
          and type ('ctx, 'a, 'd) grammar = ('ctx, 'a, 'd) Grammar.t
          and type token = Token.t
+         and type 'a v = 'a v
   end
 
   val typeof : 'ctx Type_env.t -> ('ctx, 'a, 'd) Grammar.t -> Type.t
-  val parse : ('ctx, 'a, Type.t) Grammar.t -> 'ctx Parse_env.t -> 'a parser
 end
 
 module type String_parser = sig
   include
-    Parser with type token = Uchar.t and type stream = (Uutf.decoder * Uchar.t option) ref
+    Parser
+      with type token = Uchar.t
+       and type stream = (Uutf.decoder * Uchar.t option) ref
+       and type 'a v = 'a
 
   module Library : Library with type 'a t := 'a Construction.t
 

@@ -1,16 +1,23 @@
 open Base
 open Prelude
 
-module Make (Token_stream : Signatures.Token_stream) :
-  Signatures.Parser
-    with type token = Token_stream.token
-     and type stream = Token_stream.Stream.t = struct
+module Make (Token_stream : Signatures.Token_stream) : sig
+  include
+    Signatures.Parser
+      with type token = Token_stream.token
+       and type stream = Token_stream.Stream.t
+       and type 'a parser = Token_stream.Stream.t -> 'a
+       and type 'a v = 'a
+
+  val parse : ('ctx, 'a, Type.t) Grammar.t -> 'ctx Parse_env.t -> 'a parser
+end = struct
   module Token = Token_stream.Token
   module Stream = Token_stream.Stream
 
   type token = Token.t
   type stream = Token_stream.stream
   type 'a parser = Stream.t -> 'a
+  type 'a v = 'a
 
   module Type = Type.Make (Token)
 
@@ -87,7 +94,6 @@ module Make (Token_stream : Signatures.Token_stream) :
 
     let rec typeof : type ctx a d. ctx Type_env.t -> (ctx, a, d) t -> (ctx, a, Type.t) t =
      fun env (_, g) ->
-      let data = data in
       match g with
       | Eps a -> Type.eps, Eps a
       | Seq (g1, g2) ->
@@ -155,31 +161,13 @@ module Make (Token_stream : Signatures.Token_stream) :
       type _ t = unit
     end)
 
+    module Tshift = Tshift.Make (Ctx)
+
     type 'a ctx = 'a Ctx.t
+    type 'a v = 'a
     type ('ctx, 'a, 'd) grammar = ('ctx, 'a, 'd) Grammar.t
     type token = Token.t
     type 'a t = { tdb : 'ctx. 'ctx Ctx.t -> ('ctx, 'a, unit) Grammar.t }
-
-    let rec len : type n. n Ctx.t -> int =
-     fun ctx -> match ctx with [] -> 0 | _ :: ctx -> 1 + len ctx
-   ;;
-
-    let rec tshift' : type a i j. int -> j Ctx.t -> (a * i) Ctx.t -> (j, a) Var.t =
-     fun n c1 c2 ->
-      match n, c1, c2 with
-      (* Both the 'assert false' and the 'Obj.magic' are safe here,
-       since we know (although it's not captured in the types) that
-       (a * i) is a prefix of j.
-       More details: "Unembedding Domain Specific Languages" §4.4.
-     *)
-      | _, [], _ -> assert false
-      | 0, _ :: _, _ :: _ -> Stdlib.Obj.magic Var.Z
-      | n, () :: c1, c2 -> Var.S (tshift' (n - 1) c1 c2)
-   ;;
-
-    let tshift : type a i j. j Ctx.t -> (a * i) Ctx.t -> (j, a) Var.t =
-     fun c1 c2 -> tshift' (len c1 - len c2) c1 c2
-   ;;
 
     let eps a = { tdb = (fun _ -> (), Eps a) }
     let tok c = { tdb = (fun _ -> (), Tok c) }
@@ -192,7 +180,10 @@ module Make (Token_stream : Signatures.Token_stream) :
      fun f ->
       { tdb =
           (fun i ->
-            (), Fix ((f { tdb = (fun j -> (), Var (tshift j (() :: i))) }).tdb (() :: i)))
+            ( ()
+            , Fix
+                ((f { tdb = (fun j -> (), Var (Tshift.tshift j (() :: i))) }).tdb
+                   (() :: i)) ))
       }
    ;;
 
