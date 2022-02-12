@@ -4,7 +4,7 @@ open Prelude
 
 type _ code = expression
 
-module Make (Token_stream : Signatures.Token_stream) :
+module Make (Ast : Ast_builder.S) (Token_stream : Signatures.Token_stream) :
   Staged_signatures.Parser
     with type token = Token_stream.token
      and type token_tag = Token_stream.token_tag
@@ -145,9 +145,8 @@ module Make (Token_stream : Signatures.Token_stream) :
 
   (* XXX why two typeofs? *)
   let typeof env gram = Grammar.typeof env gram |> fst
-  let parse = failwith "TODO"
 
-  module Compile (Ast : Ast_builder.S) = struct
+  module Compile = struct
     module Ir = Staged_ir.Make (Token_stream) (Ast)
 
     module Parse = struct
@@ -236,4 +235,7 @@ module Make (Token_stream : Signatures.Token_stream) :
       Ir.Codegen.generate (parse g Parse_env.[])
     ;;
   end
+
+  let compile = Compile.compile
+  let parse _ = failwith "TODO"
 end

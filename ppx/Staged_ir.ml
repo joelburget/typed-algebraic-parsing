@@ -94,11 +94,6 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
     module Quote = struct
       let string str = Ast_builder.Default.estring ~loc str
       let int i = Ast_builder.Default.eint ~loc i
-      let uchar u = [%expr Uchar.of_scalar_exn [%e int (Uchar.to_scalar u)]]
-
-      module Constant = struct
-        let uchar u = Pconst_integer (Int.to_string (Uchar.to_scalar u), None)
-      end
     end
 
     type stream_context =
@@ -166,7 +161,7 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
       let intervals = Token.Set.intervals token_set in
       let pat_of_ival ival =
         let x, y = Token.Interval.to_tuple ival in
-        ppat_interval (Quote.Constant.uchar x) (Quote.Constant.uchar y)
+        ppat_interval (Token.quote_constant x) (Token.quote_constant y)
       in
       let lhs =
         match intervals with
@@ -204,18 +199,13 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
         | Dyn of 'a code
 
       (* Build a dynamic test from an interval test *)
-      (*
-      let within : Uchar.t code -> Char_class.interval -> bool code =
+      let within : token code -> Token.interval -> bool code =
        fun c ival ->
-        let x, y = Char_class.Interval.(x ival, y ival) in
+        let x, y = Token.Interval.to_tuple ival in
         [%expr
-          Uchar.(
-            of_scalar_exn [%e Quote.uchar x] <= [%e c]
-            && [%e c] < of_scalar_exn [%e Quote.uchar y])]
+          [%e Token.unquote ~loc] [%e Token.quote ~loc x] <= [%e c]
+          && [%e c] < [%e Token.unquote ~loc] [%e Token.quote ~loc y]]
      ;;
-                 *)
-
-      let within _elt_code _ival = failwith "TODO"
 
       let member : token code -> token_set -> bool static_dynamic =
        fun c s ->
@@ -263,7 +253,7 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
       ;;
     end
 
-    let any = failwith "TODO"
+    let any = Token.Set.any
 
     let rec cdcomp : type a. context -> a comp -> expression =
      fun ctx -> function

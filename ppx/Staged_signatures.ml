@@ -50,8 +50,5 @@ module type Parser = sig
   type 'a typechecked = (unit, 'a, Type.t) Grammar.t
 
   val typecheck : 'a Construction.t -> 'a typechecked
-
-  module Compile (Ast : Ast_builder.S) : sig
-    val compile : 'a typechecked -> 'a Caml.Stream.t code
-  end
+  val compile : 'a typechecked -> 'a Caml.Stream.t code
 end

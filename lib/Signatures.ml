@@ -20,6 +20,9 @@ module type Token = sig
   val pp : t Fmt.t
   val pp_tag : tag Fmt.t
   val pp_set : set Fmt.t
+  val unquote : loc:Ppxlib.location -> Ppxlib.expression
+  val quote : loc:Ppxlib.location -> tag -> Ppxlib.expression
+  val quote_constant : tag -> Ppxlib.constant
 
   module Set : sig
     type t = set
