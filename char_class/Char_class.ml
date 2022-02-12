@@ -259,6 +259,7 @@ module Char = struct
   ;;
 
   let mem t c = mem t (Uchar.of_char c)
+  let of_list xs = of_list (Base.List.map ~f:Uchar.of_char xs)
 end
 
 let%test_module _ =
@@ -411,7 +412,8 @@ let%test_module _ =
       go (negate cd);
       go (union cd xy);
       go (negate (union cd xy));
-      [%expect{|
+      [%expect
+        {|
         []
         [\u0000, \u10FFFF]
         [c, d]

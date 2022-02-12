@@ -100,4 +100,7 @@ module Char : sig
 
   (** Is the character contained in this class? *)
   val mem : t -> char -> bool
+
+  (** Any of the characters in the list. *)
+  val of_list : char list -> t
 end
