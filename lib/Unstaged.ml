@@ -5,6 +5,7 @@ module Make (Token_stream : Signatures.Token_stream) : sig
   include
     Signatures.Parser
       with type token = Token_stream.token
+       and type token_tag = Token_stream.token_tag
        and type stream = Token_stream.Stream.t
        and type 'a parser = Token_stream.Stream.t -> 'a
        and type 'a v = 'a
@@ -14,7 +15,8 @@ end = struct
   module Token = Token_stream.Token
   module Stream = Token_stream.Stream
 
-  type token = Token.t
+  type token = Token_stream.token
+  type token_tag = Token_stream.token_tag
   type stream = Token_stream.stream
   type 'a parser = Stream.t -> 'a
   type 'a v = 'a
@@ -30,11 +32,12 @@ end = struct
       match Stream.peek s with
       | None -> parse_error "Unexpected end of stream"
       | Some c' ->
-        if Token.(c' = c)
+        if Token.(tag c' = c)
         then (
           Stream.junk s;
-          c)
-        else parse_error "Unexpected token '%a' (expected '%a')" Token.pp c' Token.pp c
+          c')
+        else
+          parse_error "Unexpected token '%a' (expected '%a')" Token.pp c' Token.pp_tag c
     ;;
 
     let bot _ = parse_error "bottom"
@@ -56,9 +59,10 @@ end = struct
         then p2 s
         else parse_error "Unexpected end of stream"
       | Some c ->
-        if Token.Set.mem tp1.first c
+        let tag = Token.tag c in
+        if Token.Set.mem tp1.first tag
         then p1 s
-        else if Token.Set.mem tp2.first c
+        else if Token.Set.mem tp2.first tag
         then p2 s
         else if tp1.null
         then p1 s
@@ -80,7 +84,7 @@ end = struct
     type ('ctx, 'a, 'd) t' =
       | Eps : 'a -> ('ctx, 'a, 'd) t'
       | Seq : ('ctx, 'a, 'd) t * ('ctx, 'b, 'd) t -> ('ctx, 'a * 'b, 'd) t'
-      | Tok : Token.t -> ('ctx, Token.t, 'd) t'
+      | Tok : Token.tag -> ('ctx, Token.t, 'd) t'
       | Bot : ('ctx, 'a, 'd) t'
       | Alt : ('ctx, 'a, 'd) t * ('ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
       | Map : ('a -> 'b) * ('ctx, 'a, 'd) t -> ('ctx, 'b, 'd) t'
@@ -143,7 +147,7 @@ end = struct
       let first_set = (data g).Type.first in
       let rec go ret s =
         match Stream.peek s with
-        | Some c when Token.Set.mem first_set c -> go (p s :: ret) s
+        | Some c when Token.Set.mem first_set (Token.tag c) -> go (p s :: ret) s
         | _ -> List.rev ret
       in
       go []
@@ -166,7 +170,8 @@ end = struct
     type 'a ctx = 'a Ctx.t
     type 'a v = 'a
     type ('ctx, 'a, 'd) grammar = ('ctx, 'a, 'd) Grammar.t
-    type token = Token.t
+    type nonrec token = token
+    type nonrec token_tag = token_tag
     type 'a t = { tdb : 'ctx. 'ctx Ctx.t -> ('ctx, 'a, unit) Grammar.t }
 
     let eps a = { tdb = (fun _ -> (), Eps a) }

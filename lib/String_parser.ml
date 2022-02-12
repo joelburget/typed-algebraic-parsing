@@ -1,6 +1,17 @@
 open Base
 open Prelude
-module Parser = Unstaged.Make (Token_streams.Uchar)
+
+type string_stream = (Uutf.decoder * Uchar.t option) ref
+
+module Parser :
+  Signatures.Parser
+    with type token = Uchar.t
+     and type token_tag = Uchar.t
+     and type stream = string_stream
+     and type 'a v = 'a
+     and type 'a parser = string_stream -> 'a =
+  Unstaged.Make (Token_streams.Uchar)
+
 module Library = Library.Make (Parser.Construction)
 include Parser
 include Library
@@ -102,7 +113,7 @@ let%test_module _ =
      fun { tdb } -> Grammar.typeof [] (tdb [])
    ;;
 
-    let parse p = parse (typecheck p) []
+    let parse p = parse (typecheck p) Parse_env.[]
 
     let go p pp str =
       let stream = Stream.of_string str in

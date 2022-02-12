@@ -10,31 +10,43 @@ end
 (** A single token and set of tokens. *)
 module type Token = sig
   type t
+  type tag
+  type set
 
-  val ( = ) : t -> t -> bool
+  val ( = ) : tag -> tag -> bool
+  val tag : t -> tag
   val pp : t Fmt.t
+  val pp_tag : tag Fmt.t
 
   module Set : sig
-    type element = t
-    type t
+    type t = set
 
     val pp : t Fmt.t
     val empty : t
-    val singleton : element -> t
+    val singleton : tag -> t
     val is_empty : t -> bool
     val ( = ) : t -> t -> bool
     val inter : t -> t -> t
     val union : t -> t -> t
-    val mem : t -> element -> bool
+    val mem : t -> tag -> bool
+    val is_subset : t -> t -> bool
+    val of_list : tag list -> t
+
+    module Infix : sig
+      (** [asymmetric_diff] *)
+      val ( - ) : t -> t -> t
+    end
   end
 end
 
 (** A stream of tokens. *)
 module type Token_stream = sig
   type token
+  type token_tag
+  type token_set
   type stream
 
-  module Token : Token with type t = token
+  module Token : Token with type t = token and type tag = token_tag
   module Stream : Stream with type element = token and type t = stream
 end
 
@@ -52,7 +64,7 @@ module type Type = sig
   val pp : t Fmt.t
   val bot : t
   val eps : t
-  val tok : Token.t -> t
+  val tok : Token.tag -> t
   val alt : t -> t -> t
   val seq : t -> t -> t
   val star : t -> t
@@ -62,11 +74,11 @@ end
 (** Constructing parsers. *)
 module type Parse = sig
   type 'a t
-  type token
+  type token_tag
   type type_
 
   val eps : 'a -> 'a t
-  val tok : token -> token t
+  val tok : token_tag -> token_tag t
   val bot : _ t
   val seq : 'a t -> 'b t -> ('a * 'b) t
   val alt : type_ -> 'a t -> type_ -> 'a t -> 'a t
@@ -106,6 +118,7 @@ module type Construction = sig
   type 'a ctx
   type ('ctx, 'a, 'd) grammar
   type token
+  type token_tag
 
   (** Values produced by parsers *)
   type 'a v
@@ -114,7 +127,7 @@ module type Construction = sig
   type 'a t = { tdb : 'ctx. 'ctx ctx -> ('ctx, 'a, unit) grammar }
 
   val eps : 'a v -> 'a t
-  val tok : token -> token t
+  val tok : token_tag -> token t
   val bot : 'a t
   val seq : 'a t -> 'b t -> ('a * 'b) t
   val alt : 'a t -> 'a t -> 'a t
@@ -147,11 +160,12 @@ end
 
 module type Parser = sig
   type token
+  type token_tag
   type stream
   type 'a parser
   type 'a v
 
-  module Token : Token with type t = token
+  module Token : Token with type t = token and type tag = token_tag
   module Stream : Stream with type element = Token.t and type t = stream
   module Type : Type with module Token = Token
   module Type_env : Env
@@ -165,19 +179,25 @@ module type Parser = sig
       Construction
         with type 'a ctx = 'a Ctx.t
          and type ('ctx, 'a, 'd) grammar = ('ctx, 'a, 'd) Grammar.t
-         and type token = Token.t
+         and type token = token
+         and type token_tag = token_tag
          and type 'a v = 'a v
   end
 
   val typeof : 'ctx Type_env.t -> ('ctx, 'a, 'd) Grammar.t -> Type.t
+  val parse : ('ctx, 'a, Type.t) Grammar.t -> 'ctx Parse_env.t -> 'a parser
 end
+
+type string_stream = (Uutf.decoder * Uchar.t option) ref
 
 module type String_parser = sig
   include
     Parser
       with type token = Uchar.t
-       and type stream = (Uutf.decoder * Uchar.t option) ref
+       and type token_tag = Uchar.t
+       and type stream = string_stream
        and type 'a v = 'a
+       and type 'a parser = string_stream -> 'a
 
   module Library : Library with type 'a t := 'a Construction.t
 

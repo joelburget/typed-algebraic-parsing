@@ -1,15 +1,40 @@
+module Uchar_token = struct
+  include Base.Uchar
+  module Set = Char_class
+
+  type tag = Uchar.t
+  type set = Char_class.t
+
+  let tag tok = tok
+  let pp = Char_class.pp_char
+  let pp_tag = pp
+end
+
+module Char_token = struct
+  include Base.Char
+
+  module Set = struct
+    include Char_class
+    include Char_class.Char
+  end
+
+  type tag = char
+  type set = Set.t
+
+  let tag tok = tok
+  let pp ppf c = Fmt.pf ppf "%C" c
+  let pp_tag = pp
+end
+
 module Uchar = struct
   type token = Uchar.t
+  type token_tag = Uchar.t
+  type token_set = Uchar_token.Set.t
   type stream = (Uutf.decoder * Uchar.t option) ref
 
   let of_decoder decoder = ref (decoder, None)
 
-  module Token = struct
-    include Base.Uchar
-    module Set = Char_class
-
-    let pp = Char_class.pp_char
-  end
+  module Token = Uchar_token
 
   module Stream = struct
     type element = Uchar.t
@@ -47,18 +72,11 @@ end
 
 module Char = struct
   type token = char
+  type token_tag = char
+  type token_set = Char_token.Set.t
   type stream = char Stdlib.Stream.t
 
-  module Token = struct
-    include Base.Char
-
-    module Set = struct
-      include Char_class
-      include Char_class.Char
-    end
-
-    let pp ppf c = Fmt.pf ppf "%C" c
-  end
+  module Token = Char_token
 
   module Stream = struct
     type element = char

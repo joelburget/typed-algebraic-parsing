@@ -185,7 +185,6 @@ module Make (Token_stream : Signatures.Token_stream) :
 
       let star tp g =
         fix (fun loop ->
-            (* peek_mem (C.diff Token.all tp.Tp.first) *)
             peek_mem (Char_class.diff Char_class.any tp.Tp.first)
             @@ function
             | `Eof -> return ([%expr []] : _ list code)

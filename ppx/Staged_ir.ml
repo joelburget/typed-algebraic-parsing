@@ -14,6 +14,7 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
   end
 
   module Parse_env = Env (Todo)
+  module Token = Token_streams.Uchar_token
 
   type _ recid = ..
 
@@ -23,11 +24,11 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
     (* junk; c *)
     | Junk : 'b comp -> 'b comp
     (* match read with Eof → kEof | c when c ∈ s → kYes | _ → kNo *)
-    | Peek_mem : Char_class.t * ([ `Eof | `Yes | `No ] -> 'b comp) -> 'b comp
+    | Peek_mem : Token.Set.t * ([ `Eof | `Yes | `No ] -> 'b comp) -> 'b comp
     (* match read with Eof → kEof
          | c when hastag(c,t) → kYes[extract t c]
          | _ → kNo *)
-    | Peek : Char_class.t * ([ `Eof | `Yes of expression | `No ] -> 'b comp) -> 'b comp
+    | Peek : Token.tag list * ([ `Eof | `Yes of expression | `No ] -> 'b comp) -> 'b comp
     (* fail s *)
     | Fail : string -> _ comp
     (* return x *)
@@ -62,7 +63,7 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
          ↝ match read with Eof → let z = kEof in c'[z]
                          | c when hastag(c,t) → let z = kYes[extract t c] in c'[z]
                          | _ → let z = kNo in c'[z] *)
-    | Peek (tag, k') -> Peek (tag, fun v -> bind (k' v) k)
+    | Peek (tags, k') -> Peek (tags, fun v -> bind (k' v) k)
     (* let z = (fail s) in c'
          ↝ fail s  *)
     | Fail s -> Fail s
@@ -97,7 +98,7 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
 
     type context =
       { stream_context : stream_context
-      ; values : Char_class.t
+      ; values : Token.Set.t
       ; next : [ `EOF | `Tok of expression | `Unknown ]
             (* rec_locus: Genletrec.locus_t; *)
       }
@@ -130,7 +131,7 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
     let rec resolve = function [] -> None | R x :: _ -> Some x | _ :: xs -> resolve xs
 
     let ifmem
-        :  expression -> (Char_class.t * expression) list -> otherwise:expression
+        :  expression -> (Token.Set.t * expression) list -> otherwise:expression
         -> expression
       =
      fun c cases ~otherwise ->
@@ -145,8 +146,8 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
    ;;
 
     let test_tag
-        :  complete:bool -> Char_class.t -> expression
-        -> (expression option -> expression) -> expression
+        :  complete:bool -> Token.Set.t -> expression -> (expression option -> expression)
+        -> expression
       =
      fun ~complete cls expr k ->
       if complete
@@ -157,10 +158,10 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
     module Tokens : sig
       val ifmem
         :  Uchar.t code
-        -> Char_class.t
-        -> Char_class.t
-        -> then_:(Char_class.t -> 'a code)
-        -> else_:(Char_class.t -> 'a code)
+        -> Token.Set.t
+        -> Token.Set.t
+        -> then_:(Token.Set.t -> 'a code)
+        -> else_:(Token.Set.t -> 'a code)
         -> 'a code
     end = struct
       type 'a static_dynamic =
@@ -168,6 +169,7 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
         | Dyn of 'a code
 
       (* Build a dynamic test from an interval test *)
+      (*
       let within : Uchar.t code -> Char_class.interval -> bool code =
        fun c ival ->
         let x, y = Char_class.Interval.(x ival, y ival) in
@@ -199,17 +201,20 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
                v + if Uchar.compare x y = 0 then 1 else 2)
              ~init:0
       ;;
+                 *)
 
+      let ntests _ = failwith "TODO"
+      let member _ _ = failwith "TODO"
       let partition _ _ = failwith "TODO"
 
       let ifmem c values cs ~then_ ~else_ =
         (* if c ∈ cs
        then [c is in thencs]
        else [c is in elsecs] *)
-        let thencs, elsecs = partition (Char_class.mem cs) values in
-        if Char_class.is_empty elsecs
+        let thencs, elsecs = partition (Token.Set.mem cs) values in
+        if Token.Set.is_empty elsecs
         then then_ thencs
-        else if Char_class.is_empty thencs
+        else if Token.Set.is_empty thencs
         then else_ elsecs
         else (
           let thencs, elsecs, then_, else_ =
@@ -223,19 +228,21 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
       ;;
     end
 
+    let any = failwith "TODO"
+
     let rec cdcomp : type a. context -> a comp -> expression =
      fun ctx -> function
       | Rec_call (({ name; body = _ } as r), k') as c ->
         (match resolve name with
         | Some { mkcall } ->
           mkcall ctx.stream_context (fun stream_context x ->
-              cdcomp { stream_context; values = Char_class.any; next = `Unknown } (k' x))
+              cdcomp { stream_context; values = any; next = `Unknown } (k' x))
         | None ->
           let () = r.name <- R (failwith "TODO") :: r.name in
           cdcomp ctx c)
       | Junk c ->
         stream_junk ctx.stream_context (fun stream_context ->
-            let ctx = { stream_context; next = `Unknown; values = Char_class.any } in
+            let ctx = { stream_context; next = `Unknown; values = any } in
             cdcomp ctx c)
       | Peek_mem (s, k') ->
         (match ctx.next with
@@ -259,31 +266,34 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
                    s
                    ~then_:(fun values -> cdcomp { ctx with values } (k' `Yes))
                    ~else_:(fun values -> cdcomp { ctx with values } (k' `No))))
-      | Peek (cls, k) ->
+      | Peek (tags, k) ->
+        let tagset = Token.Set.of_list tags in
         (match ctx.next with
         | `EOF -> cdcomp ctx (k `Eof)
         | `Tok x ->
-          if Char_class.(is_empty (inter ctx.values cls))
+          if Token.Set.(is_empty (inter ctx.values tagset))
           then cdcomp ctx (k `No)
           else (
-            let complete = Char_class.is_subset ctx.values cls in
-            let tags' = Char_class.inter ctx.values cls in
+            let complete = Token.Set.is_subset ctx.values tagset in
+            let tags' = Token.Set.inter ctx.values tagset in
             test_tag ~complete tags' x (function
                 | None ->
-                  cdcomp { ctx with values = Char_class.Infix.(ctx.values - cls) } (k `No)
+                  cdcomp
+                    { ctx with values = Token.Set.Infix.(ctx.values - tagset) }
+                    (k `No)
                 | Some x -> cdcomp { ctx with values = tags' } (k (`Yes x))))
         | `Unknown ->
           stream_peek ctx.stream_context (fun stream_context -> function
             | None -> cdcomp { ctx with stream_context; next = `EOF } (k `Eof)
             | Some x ->
-              test_tag ~complete:false cls x (function
+              test_tag ~complete:false tagset x (function
                   | None ->
                     cdcomp
-                      { ctx with values = Char_class.Infix.(ctx.values - cls) }
+                      { ctx with values = Token.Set.Infix.(ctx.values - tagset) }
                       (k `No)
                   | Some x ->
                     cdcomp
-                      { ctx with values = Char_class.inter ctx.values cls }
+                      { ctx with values = Token.Set.inter ctx.values tagset }
                       (k (`Yes x)))))
       | Fail s -> [%expr failwith [%e Quote.string s]]
       | Return x -> x
@@ -303,7 +313,7 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
     let generate : type a. a comp -> expression =
      fun expr ->
       stream_init (fun stream_context ->
-          let ctx = { stream_context; next = `Unknown; values = Char_class.any } in
+          let ctx = { stream_context; next = `Unknown; values = any } in
           cdcomp ctx expr)
    ;;
   end

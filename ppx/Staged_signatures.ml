@@ -6,12 +6,14 @@ module type Ir = sig
   type 'a t
   type 'a stream
 
+  module Token : Signatures.Token
+
   val return : expression -> 'a t
   val ( >>= ) : 'a t -> (expression -> 'b t) -> 'b t
   val fail : string -> 'a t
   val junk : unit t
-  val peek_mem : Char_class.t -> ([ `Yes | `No | `Eof ] -> 'b t) -> 'b t
-  val peek : Char_class.t -> ([ `Yes of Uchar.t code | `No | `Eof ] -> 'b t) -> 'b t
+  val peek_mem : Token.Set.t -> ([ `Yes | `No | `Eof ] -> 'b t) -> 'b t
+  val peek : Token.tag list -> ([ `Yes of Uchar.t code | `No | `Eof ] -> 'b t) -> 'b t
   val fix : ('b t -> 'b t) -> 'b t
 
   module Codegen : sig
