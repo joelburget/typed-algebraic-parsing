@@ -8,6 +8,7 @@
 type t
 
 type element = Uchar.t
+type interval
 
 include Base.Comparable.S with type t := t
 include Base.Sexpable.S with type t := t
@@ -23,6 +24,11 @@ module Infix : sig
 
   (** [asymmetric_diff] *)
   val ( - ) : t -> t -> t
+end
+
+module Interval : sig
+  val x : interval -> Uchar.t
+  val y : interval -> Uchar.t
 end
 
 module Laws : Laws.S with type t = t
@@ -79,6 +85,9 @@ val choose : t -> Uchar.t option
 
 (** Choose any character from this class. *)
 val choose_exn : t -> Uchar.t
+
+(** A list of all intervals *)
+val intervals : t -> interval list
 
 module Char : sig
   type element = char

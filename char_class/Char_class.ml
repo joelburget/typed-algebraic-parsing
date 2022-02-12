@@ -66,6 +66,10 @@ module Interval_set = struct
   ;;
 end
 
+type interval = Interval_set.interval
+
+module Interval = Interval_set.Interval
+
 module T = struct
   type t =
     | Pos of Interval_set.t
@@ -214,6 +218,15 @@ let choose_exn t =
   | None -> Fmt.failwith "failed to choose from %a" pp t
 ;;
 
+let pos_intervals t = Interval_set.fold List.cons t []
+
+let intervals = function
+  | Pos iset -> pos_intervals iset
+  | Neg iset ->
+    pos_intervals
+      Interval_set.(diff (of_interval (Interval.make Uchar.min Uchar.max)) iset)
+;;
+
 module Infix = struct
   include C
 
@@ -253,6 +266,7 @@ let%test_module _ =
     let c = Char.singleton 'c'
     let d = Char.singleton 'd'
     let cd = of_list Uchar.[ of_char 'c'; of_char 'd' ]
+    let xy = of_list Uchar.[ of_char 'x'; of_char 'y' ]
 
     let%expect_test "pp" =
       let go char_class = Fmt.pr "%a@." pp char_class in
@@ -382,6 +396,28 @@ let%test_module _ =
         d
         d
         [] |}]
+    ;;
+
+    let%expect_test "intervals" =
+      let pp_interval ppf ival =
+        let x, y = Interval.(x ival, y ival) in
+        Fmt.pf ppf "%a, %a" pp_char x pp_char y
+      in
+      let pp = Fmt.(brackets (list ~sep:semi pp_interval)) in
+      let go set = set |> intervals |> Fmt.pr "%a@." pp in
+      go empty;
+      go any;
+      go cd;
+      go (negate cd);
+      go (union cd xy);
+      go (negate (union cd xy));
+      [%expect{|
+        []
+        [\u0000, \u10FFFF]
+        [c, d]
+        [e, \u10FFFF; \u0000, b]
+        [x, y; c, d]
+        [z, \u10FFFF; e, w; \u0000, b] |}]
     ;;
   end)
 ;;
