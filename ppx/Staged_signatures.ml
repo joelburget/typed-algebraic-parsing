@@ -6,7 +6,11 @@ module type Ir = sig
   type 'a t
   type 'a stream
 
-  module Token : Signatures.Token
+  module Token :
+    Signatures.Token
+      with type t = Uchar.t
+       and type tag = Uchar.t
+       and type set = Char_class.t
 
   val return : expression -> 'a t
   val ( >>= ) : 'a t -> (expression -> 'b t) -> 'b t

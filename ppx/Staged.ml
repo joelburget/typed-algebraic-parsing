@@ -7,12 +7,14 @@ type _ code = expression
 module Make (Token_stream : Signatures.Token_stream) :
   Staged_signatures.Parser
     with type token = Token_stream.token
+     and type token_tag = Token_stream.token_tag
      and type stream = Token_stream.Stream.t
      and type 'a parser = (Token_stream.Stream.t -> 'a) code = struct
   module Token = Token_stream.Token
   module Stream = Token_stream.Stream
 
   type token = Token.t
+  type token_tag = Token.tag
   type stream = Token_stream.stream
   type 'a parser = (Token_stream.Stream.t -> 'a) code
 
@@ -31,7 +33,7 @@ module Make (Token_stream : Signatures.Token_stream) :
     type ('ctx, 'a, 'd) t' =
       | Eps : 'a code -> ('ctx, 'a, 'd) t'
       | Seq : ('ctx, 'a, 'd) t * ('ctx, 'b, 'd) t -> ('ctx, 'a * 'b, 'd) t'
-      | Tok : Token.t -> ('ctx, Token.t, 'd) t'
+      | Tok : Token.tag -> ('ctx, Token.t, 'd) t'
       | Bot : ('ctx, 'a, 'd) t'
       | Alt : ('ctx, 'a, 'd) t * ('ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
       | Map : ('a code -> 'b code) * ('ctx, 'a, 'd) t -> ('ctx, 'b, 'd) t'
@@ -87,6 +89,7 @@ module Make (Token_stream : Signatures.Token_stream) :
     type nonrec 'a v = 'a v
     type ('ctx, 'a, 'd) grammar = ('ctx, 'a, 'd) Grammar.t
     type token = Token.t
+    type token_tag = Token.tag
     type 'a t = { tdb : 'ctx. 'ctx ctx -> ('ctx, 'a, unit) grammar }
 
     let crush : type ctx a x. (ctx, a, x) Grammar.t -> (ctx, a, x) Grammar.t =
@@ -142,6 +145,7 @@ module Make (Token_stream : Signatures.Token_stream) :
 
   (* XXX why two typeofs? *)
   let typeof env gram = Grammar.typeof env gram |> fst
+  let parse = failwith "TODO"
 
   module Compile (Ast : Ast_builder.S) = struct
     module Ir = Staged_ir.Make (Ast)

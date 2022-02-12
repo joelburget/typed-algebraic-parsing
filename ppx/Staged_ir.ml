@@ -87,7 +87,12 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
     module Quote = struct
       let string str = Ast_builder.Default.estring ~loc str
       let int i = Ast_builder.Default.eint ~loc i
+      let uchar u = [%expr Uchar.of_scalar_exn [%e int (Uchar.to_scalar u)]]
+
       (* let bool b = Ast_builder.Default.ebool ~loc b *)
+      module Constant = struct
+        let uchar u = Pconst_integer (Int.to_string (Uchar.to_scalar u), None)
+      end
     end
 
     type stream_context =
@@ -130,7 +135,8 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
 
     let rec resolve = function [] -> None | R x :: _ -> Some x | _ :: xs -> resolve xs
 
-    let ifmem
+    (*
+    let ifmem'
         :  expression -> (Token.Set.t * expression) list -> otherwise:expression
         -> expression
       =
@@ -144,6 +150,29 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
       let branches = branches @ [ case ~lhs:[%pat? _] ~guard ~rhs:otherwise ] in
       pexp_match c branches
    ;;
+       *)
+
+    let ifmem
+        : expression -> Token.Set.t -> expression -> otherwise:expression -> expression
+      =
+     fun c token_set rhs ~otherwise ->
+      let open Ast in
+      let intervals = Char_class.intervals token_set in
+      let pat_of_ival ival =
+        let x, y = Char_class.Interval.(x ival, y ival) in
+        ppat_interval (Quote.Constant.uchar x) (Quote.Constant.uchar y)
+      in
+      let lhs =
+        match intervals with
+        | [] -> failwith "Empty interval list not supported"
+        | ival :: ivals ->
+          List.fold ivals ~init:(pat_of_ival ival) ~f:(fun accum ival ->
+              ppat_or accum (pat_of_ival ival))
+      in
+      let branch = case ~lhs ~guard ~rhs in
+      let branches = [ branch; case ~lhs:[%pat? _] ~guard ~rhs:otherwise ] in
+      pexp_match c branches
+   ;;
 
     let test_tag
         :  complete:bool -> Token.Set.t -> expression -> (expression option -> expression)
@@ -152,12 +181,12 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
      fun ~complete cls expr k ->
       if complete
       then k (Some expr)
-      else ifmem expr [ cls, k (Some expr) ] ~otherwise:(k None)
+      else ifmem expr cls (k (Some expr)) ~otherwise:(k None)
    ;;
 
     module Tokens : sig
       val ifmem
-        :  Uchar.t code
+        :  Token.t code
         -> Token.Set.t
         -> Token.Set.t
         -> then_:(Token.Set.t -> 'a code)
@@ -169,15 +198,13 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
         | Dyn of 'a code
 
       (* Build a dynamic test from an interval test *)
-      (*
       let within : Uchar.t code -> Char_class.interval -> bool code =
        fun c ival ->
         let x, y = Char_class.Interval.(x ival, y ival) in
-        let x, y = Uchar.(to_scalar x, to_scalar y) in
         [%expr
           Uchar.(
-            of_scalar_exn [%e Quote.int x] <= [%e c]
-            && [%e c] < of_scalar_exn [%e Quote.int y])]
+            of_scalar_exn [%e Quote.uchar x] <= [%e c]
+            && [%e c] < of_scalar_exn [%e Quote.uchar y])]
      ;;
 
       let member : Uchar.t code -> Char_class.t -> bool static_dynamic =
@@ -201,17 +228,15 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
                v + if Uchar.compare x y = 0 then 1 else 2)
              ~init:0
       ;;
-                 *)
 
-      let ntests _ = failwith "TODO"
-      let member _ _ = failwith "TODO"
-      let partition _ _ = failwith "TODO"
-
-      let ifmem c values cs ~then_ ~else_ =
+      let ifmem (c : Token.t code) (values : Token.Set.t) (cs : Token.Set.t) ~then_ ~else_
+        =
         (* if c ∈ cs
        then [c is in thencs]
        else [c is in elsecs] *)
-        let thencs, elsecs = partition (Token.Set.mem cs) values in
+        (* let thencs, elsecs = partition (Token.Set.mem cs) values in *)
+        let thencs = Token.Set.inter values cs in
+        let elsecs = Token.Set.Infix.(values - cs) in
         if Token.Set.is_empty elsecs
         then then_ thencs
         else if Token.Set.is_empty thencs

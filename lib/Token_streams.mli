@@ -1,5 +1,11 @@
-module Uchar_token : Signatures.Token with type t = Uchar.t
-module Char_token : Signatures.Token with type t = char
+module Uchar_token :
+  Signatures.Token
+    with type t = Uchar.t
+     and type tag = Uchar.t
+     and type set = Char_class.t
+
+module Char_token :
+  Signatures.Token with type t = char and type tag = char and type set = Char_class.t
 
 module Uchar : sig
   include
