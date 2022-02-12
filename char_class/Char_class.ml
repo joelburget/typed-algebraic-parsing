@@ -68,7 +68,13 @@ end
 
 type interval = Interval_set.interval
 
-module Interval = Interval_set.Interval
+module Interval = struct
+  let x, y = Interval_set.Interval.(x, y)
+
+  type t = interval
+
+  let to_tuple ival = x ival, y ival
+end
 
 module T = struct
   type t =

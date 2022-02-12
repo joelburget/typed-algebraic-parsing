@@ -12,16 +12,20 @@ module type Token = sig
   type t
   type tag
   type set
+  type interval
 
+  val compare : tag -> tag -> int
   val ( = ) : tag -> tag -> bool
   val tag : t -> tag
   val pp : t Fmt.t
   val pp_tag : tag Fmt.t
+  val pp_set : set Fmt.t
 
   module Set : sig
     type t = set
 
     val pp : t Fmt.t
+    val any : t
     val empty : t
     val singleton : tag -> t
     val is_empty : t -> bool
@@ -31,11 +35,18 @@ module type Token = sig
     val mem : t -> tag -> bool
     val is_subset : t -> t -> bool
     val of_list : tag list -> t
+    val intervals : t -> interval list
 
     module Infix : sig
       (** [asymmetric_diff] *)
       val ( - ) : t -> t -> t
     end
+  end
+
+  module Interval : sig
+    type t = interval
+
+    val to_tuple : t -> tag * tag
   end
 end
 
@@ -46,7 +57,9 @@ module type Token_stream = sig
   type token_set
   type stream
 
-  module Token : Token with type t = token and type tag = token_tag
+  module Token :
+    Token with type t = token and type tag = token_tag and type set = token_set
+
   module Stream : Stream with type element = token and type t = stream
 end
 
@@ -64,7 +77,7 @@ module type Type = sig
   val pp : t Fmt.t
   val bot : t
   val eps : t
-  val tok : Token.tag -> t
+  val tok : Token.Set.t -> t
   val alt : t -> t -> t
   val seq : t -> t -> t
   val star : t -> t
@@ -127,7 +140,7 @@ module type Construction = sig
   type 'a t = { tdb : 'ctx. 'ctx ctx -> ('ctx, 'a, unit) grammar }
 
   val eps : 'a v -> 'a t
-  val tok : token_tag -> token t
+  val tok : token_tag list -> token t
   val bot : 'a t
   val seq : 'a t -> 'b t -> ('a * 'b) t
   val alt : 'a t -> 'a t -> 'a t

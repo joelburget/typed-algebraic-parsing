@@ -33,7 +33,7 @@ module Make (Token_stream : Signatures.Token_stream) :
     type ('ctx, 'a, 'd) t' =
       | Eps : 'a code -> ('ctx, 'a, 'd) t'
       | Seq : ('ctx, 'a, 'd) t * ('ctx, 'b, 'd) t -> ('ctx, 'a * 'b, 'd) t'
-      | Tok : Token.tag -> ('ctx, Token.t, 'd) t'
+      | Tok : Token.tag list -> ('ctx, Token.t, 'd) t'
       | Bot : ('ctx, 'a, 'd) t'
       | Alt : ('ctx, 'a, 'd) t * ('ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
       | Map : ('a code -> 'b code) * ('ctx, 'a, 'd) t -> ('ctx, 'b, 'd) t'
@@ -54,7 +54,7 @@ module Make (Token_stream : Signatures.Token_stream) :
         let g1 = typeof env g1 in
         let g2 = typeof env' g2 in
         Type.seq (data g1) (data g2), Seq (g1, g2)
-      | Tok c -> Type.tok c, Tok c
+      | Tok c -> Type.tok (Token.Set.of_list c), Tok c
       | Bot -> Type.bot, Bot
       | Alt (g1, g2) ->
         let g1 = typeof env g1 in
@@ -119,7 +119,7 @@ module Make (Token_stream : Signatures.Token_stream) :
              *)
 
     let eps a = { tdb = (fun _ -> (), Eps a) }
-    let tok t = { tdb = (fun _ -> (), Tok t) }
+    let tok tag_list = { tdb = (fun _ -> (), Tok tag_list) }
     let bot = { tdb = (fun _ -> (), Bot) }
     let seq f g = { tdb = (fun i -> (), Seq (f.tdb i, g.tdb i)) }
     let alt f g = { tdb = (fun i -> crush ((), Alt (f.tdb i, g.tdb i))) }
@@ -148,7 +148,7 @@ module Make (Token_stream : Signatures.Token_stream) :
   let parse = failwith "TODO"
 
   module Compile (Ast : Ast_builder.S) = struct
-    module Ir = Staged_ir.Make (Ast)
+    module Ir = Staged_ir.Make (Token_stream) (Ast)
 
     module Parse = struct
       open Ast
@@ -189,7 +189,7 @@ module Make (Token_stream : Signatures.Token_stream) :
 
       let star tp g =
         fix (fun loop ->
-            peek_mem (Char_class.diff Char_class.any tp.Tp.first)
+            peek_mem Token.Set.(Infix.(any - tp.Type.first))
             @@ function
             | `Eof -> return ([%expr []] : _ list code)
             | `Yes -> return ([%expr []] : _ list code)

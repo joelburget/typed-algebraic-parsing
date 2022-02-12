@@ -27,8 +27,11 @@ module Infix : sig
 end
 
 module Interval : sig
+  type t = interval
+
   val x : interval -> Uchar.t
   val y : interval -> Uchar.t
+  val to_tuple : interval -> Uchar.t * Uchar.t
 end
 
 module Laws : Laws.S with type t = t

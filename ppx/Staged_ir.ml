@@ -4,7 +4,14 @@ open Prelude
 
 type _ code = expression
 
-module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
+module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S) :
+  Staged_signatures.Ir
+    with type token = Token_stream.token
+     and type token_tag = Token_stream.token_tag
+     and type token_set = Token_stream.token_set = struct
+  type token = Token_stream.token
+  type token_tag = Token_stream.token_tag
+  type token_set = Token_stream.token_set
   type _ stream (* TODO *)
 
   let loc = Ast.loc
@@ -14,7 +21,7 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
   end
 
   module Parse_env = Env (Todo)
-  module Token = Token_streams.Uchar_token
+  module Token = Token_stream.Token
 
   type _ recid = ..
 
@@ -89,7 +96,6 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
       let int i = Ast_builder.Default.eint ~loc i
       let uchar u = [%expr Uchar.of_scalar_exn [%e int (Uchar.to_scalar u)]]
 
-      (* let bool b = Ast_builder.Default.ebool ~loc b *)
       module Constant = struct
         let uchar u = Pconst_integer (Int.to_string (Uchar.to_scalar u), None)
       end
@@ -157,9 +163,9 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
       =
      fun c token_set rhs ~otherwise ->
       let open Ast in
-      let intervals = Char_class.intervals token_set in
+      let intervals = Token.Set.intervals token_set in
       let pat_of_ival ival =
-        let x, y = Char_class.Interval.(x ival, y ival) in
+        let x, y = Token.Interval.to_tuple ival in
         ppat_interval (Quote.Constant.uchar x) (Quote.Constant.uchar y)
       in
       let lhs =
@@ -198,6 +204,7 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
         | Dyn of 'a code
 
       (* Build a dynamic test from an interval test *)
+      (*
       let within : Uchar.t code -> Char_class.interval -> bool code =
        fun c ival ->
         let x, y = Char_class.Interval.(x ival, y ival) in
@@ -206,10 +213,13 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
             of_scalar_exn [%e Quote.uchar x] <= [%e c]
             && [%e c] < of_scalar_exn [%e Quote.uchar y])]
      ;;
+                 *)
 
-      let member : Uchar.t code -> Char_class.t -> bool static_dynamic =
+      let within _elt_code _ival = failwith "TODO"
+
+      let member : token code -> token_set -> bool static_dynamic =
        fun c s ->
-        match Char_class.intervals s with
+        match Token.Set.intervals s with
         | [] -> Sta false
         | i :: is ->
           Dyn
@@ -221,11 +231,11 @@ module Make (Ast : Ast_builder.S) : Staged_signatures.Ir = struct
 
       let ntests s =
         s
-        |> Char_class.intervals
+        |> Token.Set.intervals
         |> List.fold
              ~f:(fun v ival ->
-               let x, y = Char_class.Interval.(x ival, y ival) in
-               v + if Uchar.compare x y = 0 then 1 else 2)
+               let x, y = Token.Interval.to_tuple ival in
+               v + if Token.compare x y = 0 then 1 else 2)
              ~init:0
       ;;
 

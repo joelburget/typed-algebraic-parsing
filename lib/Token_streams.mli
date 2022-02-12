@@ -3,9 +3,14 @@ module Uchar_token :
     with type t = Uchar.t
      and type tag = Uchar.t
      and type set = Char_class.t
+     and type interval = Char_class.interval
 
 module Char_token :
-  Signatures.Token with type t = char and type tag = char and type set = Char_class.t
+  Signatures.Token
+    with type t = char
+     and type tag = char
+     and type set = Char_class.t
+     and type interval = Char_class.interval
 
 module Uchar : sig
   include

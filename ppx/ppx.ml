@@ -6,7 +6,7 @@ let expand_parser ~loc ~path:_ expr =
       let loc = loc
     end)
   in
-  let module Ir = Staged_ir.Make (Ast) in
+  let module Ir = Staged_ir.Make (Token_streams.Uchar) (Ast) in
   let module Codegen = Ir.Codegen in
   let module Parser = Staged.Make (Token_streams.Uchar) in
   let open Parser in

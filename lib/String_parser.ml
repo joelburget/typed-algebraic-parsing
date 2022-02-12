@@ -23,7 +23,7 @@ module Stream = struct
   let of_string str = Token_streams.Uchar.of_decoder (Uutf.decoder (`String str))
 end
 
-let ctok c = tok (Uchar.of_char c)
+let ctok c = tok [ Uchar.of_char c ]
 let charset s = s |> String.to_list |> List.map ~f:ctok |> choice
 let lower = charset "abcdefghijklmnopqrstuvwxyz"
 let upper = charset "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -135,7 +135,7 @@ let%test_module _ =
     ;;
 
     let%expect_test "unicode tok" =
-      go (tok (Stdlib.Uchar.of_int 0x1F3C1)) Token.pp "🏁";
+      go (tok [ Stdlib.Uchar.of_int 0x1F3C1 ]) Token.pp "🏁";
       [%expect {| \u1F3C1 |}]
     ;;
 

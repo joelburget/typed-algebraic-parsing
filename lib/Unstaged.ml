@@ -28,16 +28,16 @@ end = struct
 
     let eps a _s = a
 
-    let tok c s =
+    let tok set s =
       match Stream.peek s with
       | None -> parse_error "Unexpected end of stream"
       | Some c' ->
-        if Token.(tag c' = c)
+        if Token.Set.mem set (Token.tag c')
         then (
           Stream.junk s;
           c')
         else
-          parse_error "Unexpected token '%a' (expected '%a')" Token.pp c' Token.pp_tag c
+          parse_error "Unexpected token '%a' (expected '%a')" Token.pp c' Token.pp_set set
     ;;
 
     let bot _ = parse_error "bottom"
@@ -84,7 +84,7 @@ end = struct
     type ('ctx, 'a, 'd) t' =
       | Eps : 'a -> ('ctx, 'a, 'd) t'
       | Seq : ('ctx, 'a, 'd) t * ('ctx, 'b, 'd) t -> ('ctx, 'a * 'b, 'd) t'
-      | Tok : Token.tag -> ('ctx, Token.t, 'd) t'
+      | Tok : Token.tag list -> ('ctx, Token.t, 'd) t'
       | Bot : ('ctx, 'a, 'd) t'
       | Alt : ('ctx, 'a, 'd) t * ('ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
       | Map : ('a -> 'b) * ('ctx, 'a, 'd) t -> ('ctx, 'b, 'd) t'
@@ -105,7 +105,7 @@ end = struct
         let g1 = typeof env g1 in
         let g2 = typeof env' g2 in
         Type.seq (data g1) (data g2), Seq (g1, g2)
-      | Tok c -> Type.tok c, Tok c
+      | Tok c -> Type.tok (Token.Set.of_list c), Tok c
       | Bot -> Type.bot, Bot
       | Alt (g1, g2) ->
         let g1 = typeof env g1 in
@@ -138,7 +138,7 @@ end = struct
       let p1 = parse g1 env in
       let p2 = parse g2 env in
       seq p1 p2
-    | Tok c -> tok c
+    | Tok c -> tok (Token.Set.of_list c)
     | Bot -> bot
     | Alt (g1, g2) -> alt (data g1) (parse g1 env) (data g2) (parse g2 env)
     | Map (f, g) -> parse g env |> map f

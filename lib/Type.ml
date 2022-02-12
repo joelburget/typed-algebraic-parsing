@@ -30,11 +30,10 @@ struct
   ;;
 
   let empty = Token.Set.empty
-  let singleton = Token.Set.singleton
   let ( ==> ) b cs = if b then cs else empty
   let bot = { first = empty; flast = empty; null = false; guarded = true }
   let eps = { first = empty; flast = empty; null = true; guarded = true }
-  let tok c = { first = singleton c; flast = empty; null = false; guarded = true }
+  let tok set = { first = set; flast = empty; null = false; guarded = true }
   let separable t1 t2 = Token.Set.(is_empty (inter t1.flast t2.first)) && not t1.null
 
   let apart t1 t2 =
