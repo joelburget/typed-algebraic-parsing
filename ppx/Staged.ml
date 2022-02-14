@@ -33,7 +33,7 @@ module Make (Ast : Ast_builder.S) (Token_stream : Signatures.Token_stream) :
     type ('ctx, 'a, 'd) t' =
       | Eps : 'a code -> ('ctx, 'a, 'd) t'
       | Seq : ('ctx, 'a, 'd) t * ('ctx, 'b, 'd) t -> ('ctx, 'a * 'b, 'd) t'
-      | Tok : Token.tag list -> ('ctx, Token.t, 'd) t'
+      | Tok : Token.tag list -> ('ctx, 'a, 'd) t'
       | Bot : ('ctx, 'a, 'd) t'
       | Alt : ('ctx, 'a, 'd) t * ('ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
       | Map : ('a code -> 'b code) * ('ctx, 'a, 'd) t -> ('ctx, 'b, 'd) t'
@@ -93,21 +93,17 @@ module Make (Ast : Ast_builder.S) (Token_stream : Signatures.Token_stream) :
     type 'a t = { tdb : 'ctx. 'ctx ctx -> ('ctx, 'a, unit) grammar }
 
     let crush : type ctx a x. (ctx, a, x) Grammar.t -> (ctx, a, x) Grammar.t =
-     fun _ -> failwith "TODO"
-   ;;
-
-    (*
-      let rec loop (toks : Token.t list) (summands : (ctx, a, x) Grammar.t list)
+      let rec loop (toks : Token.tag list) (summands : (ctx, a, x) Grammar.t list)
         = function
         | _, Grammar.Alt (l, r) ->
           let toks, summands = loop toks summands l in
           let toks, summands = loop toks summands r in
           toks, summands
-        | _, Tok t -> t :: toks, summands
+        | _, Tok t -> t @ toks, summands
         | e -> toks, e :: summands
       in
       let alt e es =
-        List.fold_right ~f:(fun (d, x) y -> Alt ((d, x), (d, y))) ~init:e es
+        List.fold_right ~f:(fun (d, x) y -> Grammar.Alt ((d, x), (d, y))) ~init:es e
       in
       fun ((d, _) as e) ->
         ( d
@@ -116,7 +112,7 @@ module Make (Ast : Ast_builder.S) (Token_stream : Signatures.Token_stream) :
           | toks, [] -> Tok toks
           | [], (_, e) :: es -> alt es e
           | toks, es -> alt es (Tok toks) )
-             *)
+    ;;
 
     let eps a = { tdb = (fun _ -> (), Eps a) }
     let tok tag_list = { tdb = (fun _ -> (), Tok tag_list) }
