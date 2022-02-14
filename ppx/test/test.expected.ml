@@ -10,3 +10,4 @@ let p3 ~index  s =
   else
     (let c = Base.String.unsafe_get s index in
      failwith "No progress possible!")
+let p4 ~index  s = let n = Base.String.length s in 1

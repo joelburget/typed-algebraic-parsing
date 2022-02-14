@@ -7,17 +7,22 @@ let expand_parser ~loc ~path:_ expr =
     end)
   in
   let open Staged.Make (Ast) (Token_streams.Uchar) in
-  let reflect : 'a Staged_signatures.code -> 'a Construction.t =
-   fun { pexp_desc; _ } ->
+  let rec reflect : 'a Staged_signatures.code -> 'a Construction.t =
     let open Construction in
-    match pexp_desc with
-    | Pexp_ident { txt; loc = _ } ->
-      (match txt with
-      | Lident "bot" -> bot
-      (* | Lident "eps" -> eps *)
+    function
+    | [%expr bot] -> bot
+    | { pexp_desc; _ } ->
+      (match pexp_desc with
+      | Pexp_apply ([%expr eps], [ (_label, arg) ]) -> eps arg
+      | Pexp_apply ([%expr seq], [ (_label, p1); (_, p2) ]) ->
+        (* XXX *) Stdlib.Obj.magic (seq (reflect p1) (reflect p2))
+      | Pexp_apply ([%expr star], [ (_, p) ]) -> Stdlib.Obj.magic (star (reflect p))
+      (* | Pexp_apply ([%expr tok], [ (_, t) ]) -> tok t *)
+      | Pexp_apply ([%expr alt], [ (_, p1); (_, p2) ])
+      | Pexp_apply ({ pexp_desc = Pexp_apply ([%expr alt], [ (_, p1) ]); _ }, [ (_, p2) ])
+        ->
+        alt (reflect p1) (reflect p2)
       | _ -> failwith "TODO")
-    | Pexp_apply _ -> failwith "TODO"
-    | _ -> failwith "TODO"
   in
   expr |> reflect |> typecheck |> compile
 ;;

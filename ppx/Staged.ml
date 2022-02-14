@@ -9,7 +9,8 @@ module Make (Ast : Ast_builder.S) (Token_stream : Signatures.Token_stream) :
     with type token = Token_stream.token
      and type token_tag = Token_stream.token_tag
      and type stream = Token_stream.Stream.t
-     and type 'a parser = (Token_stream.Stream.t -> 'a) code = struct
+     and type 'a parser = (Token_stream.Stream.t -> 'a) code
+     and type 'a v = 'a code = struct
   module Token = Token_stream.Token
   module Stream = Token_stream.Stream
 
