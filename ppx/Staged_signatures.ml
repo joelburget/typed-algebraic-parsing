@@ -31,8 +31,8 @@ module type Ir = sig
   module Token :
     Signatures.Token with type t = token and type tag = token_tag and type set = token_set
 
-  val return : expression -> 'a t
-  val ( >>= ) : 'a t -> (expression -> 'b t) -> 'b t
+  val return : 'a code -> 'a t
+  val ( >>= ) : 'a t -> ('a code -> 'b t) -> 'b t
   val fail : string -> 'a t
   val junk : unit t
   val peek_mem : token_set -> ([ `Yes | `No | `Eof ] -> 'b t) -> 'b t

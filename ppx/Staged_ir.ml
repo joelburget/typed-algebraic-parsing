@@ -27,7 +27,7 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
 
   type 'a comp =
     (* let x = r () in c[x] *)
-    | Rec_call : 'a recvar * (expression -> 'b comp) -> 'b comp
+    | Rec_call : 'a recvar * ('a code -> 'b comp) -> 'b comp
     (* junk; c *)
     | Junk : 'b comp -> 'b comp
     (* match read with Eof → kEof | c when c ∈ s → kYes | _ → kNo *)
@@ -39,7 +39,7 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
     (* fail s *)
     | Fail : string -> _ comp
     (* return x *)
-    | Return : expression -> 'a comp
+    | Return : 'a code -> 'a comp
 
   and 'a recvar =
     { body : 'a comp -> 'a comp
@@ -48,7 +48,7 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
 
   type 'a t = 'a comp
 
-  let rec bind : type a b. a comp -> (expression -> b comp) -> b comp =
+  let rec bind : type a b. a comp -> (a code -> b comp) -> b comp =
    fun m k ->
     match m with
     (* let z = (let x = r () in c[x]) in c'[z]
@@ -127,12 +127,10 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
           [%e f ctx (Some [%expr c])])]
     ;;
 
-    type mkcall =
-      { mkcall :
-          stream_context -> (stream_context -> expression -> expression) -> expression
-      }
+    type 'a mkcall =
+      { mkcall : 'b. stream_context -> (stream_context -> 'a code -> 'b code) -> 'b code }
 
-    type 'a recid += R of mkcall
+    type 'a recid += R of 'a mkcall
 
     let rec resolve = function [] -> None | R x :: _ -> Some x | _ :: xs -> resolve xs
 
