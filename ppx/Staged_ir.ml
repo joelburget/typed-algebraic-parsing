@@ -120,7 +120,7 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
     let stream_peek (* { index; string; length } *) ctx f =
       let i = context_index ctx in
       [%expr
-        if [%e i]
+        if Base.Int.([%e i] >= [%e ctx.length])
         then [%e f ctx None]
         else (
           let c = Base.String.unsafe_get [%e ctx.string] [%e i] in
