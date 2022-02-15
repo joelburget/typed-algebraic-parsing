@@ -2,24 +2,54 @@ open Ppxlib
 
 type _ code = expression
 
-(** Same as [Signatures.Token] but must support [within] as well. *)
+module type Stream = sig
+  type element
+  type t
+
+  (** Information used during codegen. *)
+  type context
+
+  val peek : t -> element option
+  val junk : t -> unit
+
+  val staged_peek
+    :  loc:location
+    -> context
+    -> (context -> element code option -> 'a code)
+    -> 'a code
+
+  val staged_junk : context -> (context -> 'a code) -> 'a code
+
+  (* val return : t -> 'a code -> 'a return code *)
+  val init : loc:location -> (context -> _ code) -> _ code
+end
+
 module type Token = sig
   include Signatures.Token
 
-  val within : tag -> tag -> t code -> bool code
+  val unquote : loc:location -> expression
+  val quote : loc:location -> tag -> expression
+  val reflect : expression -> t option
+
+  module Interval : sig
+    include Signatures.Interval with type t = interval and type tag := tag
+
+    val to_pattern : loc:location -> t list -> pattern * expression option
+  end
 end
 
-(*
+(** Similar to [Signatures.Token_stream] but for code generation. *)
 module type Token_stream = sig
-  include Signatures.Token_stream
+  type token
+  type token_tag
+  type token_set
+  type stream
 
   module Token :
     Token with type t = token and type tag = token_tag and type set = token_set
-end
-   *)
 
-(** Same as [Signatures.Token_stream] but must support [within] as well. *)
-module type Token_stream = Signatures.Token_stream
+  module Stream : Stream with type element = token and type t = stream
+end
 
 module type Ir = sig
   type token
@@ -29,7 +59,7 @@ module type Ir = sig
   type 'a stream
 
   module Token :
-    Signatures.Token with type t = token and type tag = token_tag and type set = token_set
+    Token with type t = token and type tag = token_tag and type set = token_set
 
   val return : 'a code -> 'a t
   val ( >>= ) : 'a t -> ('a code -> 'b t) -> 'b t
@@ -44,11 +74,59 @@ module type Ir = sig
   end
 end
 
+(** The type of parsers. *)
+module type Type = sig
+  module Token : Token
+
+  type t =
+    { first : Token.Set.t
+    ; flast : Token.Set.t
+    ; null : bool
+    ; guarded : bool
+    }
+
+  val pp : t Fmt.t
+  val bot : t
+  val eps : t
+  val tok : Token.Set.t -> t
+  val alt : t -> t -> t
+  val seq : t -> t -> t
+  val star : t -> t
+  val fix : (t -> t) -> t
+end
+
 module type Parser = sig
-  include Signatures.Parser
+  type token
+  type token_tag
+  type stream
+  type 'a parser
+  type 'a v
+
+  module Token : Token with type t = token and type tag = token_tag
+  module Stream : Stream with type element = Token.t and type t = stream
+  module Type : Type with module Token = Token
+  module Type_env : Signatures.Env
+  module Parse_env : Signatures.Env
+
+  module Grammar :
+    Signatures.Grammar with type 'a type_env := 'a Type_env.t and type type_ := Type.t
 
   type 'a typechecked = (unit, 'a, Type.t) Grammar.t
 
+  module Construction : sig
+    module Ctx : Signatures.Env
+
+    include
+      Signatures.Construction
+        with type 'a ctx = 'a Ctx.t
+         and type ('ctx, 'a, 'd) grammar = ('ctx, 'a, 'd) Grammar.t
+         and type token = token
+         and type token_tag = token_tag
+         and type 'a v = 'a v
+  end
+
+  val typeof : 'ctx Type_env.t -> ('ctx, 'a, 'd) Grammar.t -> Type.t
+  val parse : ('ctx, 'a, Type.t) Grammar.t -> 'ctx Parse_env.t -> 'a parser
   val typecheck : 'a Construction.t -> 'a typechecked
   val compile : 'a typechecked -> 'a Caml.Stream.t code
 end

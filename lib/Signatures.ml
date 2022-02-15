@@ -7,6 +7,13 @@ module type Stream = sig
   val junk : t -> unit
 end
 
+module type Interval = sig
+  type t
+  type tag
+
+  val to_tuple : t -> tag * tag
+end
+
 (** A single token and set of tokens. *)
 module type Token = sig
   type t
@@ -20,9 +27,6 @@ module type Token = sig
   val pp : t Fmt.t
   val pp_tag : tag Fmt.t
   val pp_set : set Fmt.t
-  val unquote : loc:Ppxlib.location -> Ppxlib.expression
-  val quote : loc:Ppxlib.location -> tag -> Ppxlib.expression
-  val quote_constant : tag -> Ppxlib.constant
 
   module Set : sig
     type t = set
@@ -46,11 +50,7 @@ module type Token = sig
     end
   end
 
-  module Interval : sig
-    type t = interval
-
-    val to_tuple : t -> tag * tag
-  end
+  module Interval : Interval with type t = interval and type tag := tag
 end
 
 (** A stream of tokens. *)

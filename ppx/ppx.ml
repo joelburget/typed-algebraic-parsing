@@ -6,7 +6,7 @@ let expand_parser ~loc ~path:_ expr =
       let loc = loc
     end)
   in
-  let open Staged.Make (Ast) (Token_streams.Uchar) in
+  let open Staged.Make (Ast) (Token_streams.Char) in
   let rec reflect : 'a Staged_signatures.code -> 'a Construction.t =
     let open Construction in
     function
@@ -17,7 +17,10 @@ let expand_parser ~loc ~path:_ expr =
       | Pexp_apply ([%expr seq], [ (_label, p1); (_, p2) ]) ->
         (* XXX *) Stdlib.Obj.magic (seq (reflect p1) (reflect p2))
       | Pexp_apply ([%expr star], [ (_, p) ]) -> Stdlib.Obj.magic (star (reflect p))
-      (* | Pexp_apply ([%expr tok], [ (_, t) ]) -> tok t *)
+      | Pexp_apply ([%expr tok], [ (_, t) ]) ->
+        (match Token.reflect t with
+        | None -> failwith "failed to reflect token"
+        | Some t -> tok [ t ])
       | Pexp_apply ([%expr alt], [ (_, p1); (_, p2) ])
       | Pexp_apply ({ pexp_desc = Pexp_apply ([%expr alt], [ (_, p1) ]); _ }, [ (_, p2) ])
         ->

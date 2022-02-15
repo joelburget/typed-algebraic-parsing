@@ -4,12 +4,12 @@ open Prelude
 
 type _ code = expression
 
-module Make (Ast : Ast_builder.S) (Token_stream : Signatures.Token_stream) :
+module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream) :
   Staged_signatures.Parser
     with type token = Token_stream.token
      and type token_tag = Token_stream.token_tag
-     and type stream = Token_stream.Stream.t
-     and type 'a parser = (Token_stream.Stream.t -> 'a) code
+     and type stream = Token_stream.stream
+     and type 'a parser = (Token_stream.stream -> 'a) code
      and type 'a v = 'a code = struct
   module Token = Token_stream.Token
   module Stream = Token_stream.Stream
@@ -17,9 +17,25 @@ module Make (Ast : Ast_builder.S) (Token_stream : Signatures.Token_stream) :
   type token = Token.t
   type token_tag = Token.tag
   type stream = Token_stream.stream
-  type 'a parser = (Token_stream.Stream.t -> 'a) code
+  type 'a parser = (Token_stream.stream -> 'a) code
 
-  module Type = Type.Make (Token)
+  module Type : Staged_signatures.Type with module Token = Token = struct
+    include Type.Make (Token)
+
+    module Token = struct
+      include Token
+
+      let quote ~loc:_ _ = failwith "TODO"
+      let unquote ~loc:_ = failwith "TODO"
+      let reflect _ = failwith "TODO"
+
+      module Interval = struct
+        include Interval
+
+        let to_pattern ~loc:_ _ = failwith "TODO"
+      end
+    end
+  end
 
   module Type_env = Env (struct
     type _ t = Type.t

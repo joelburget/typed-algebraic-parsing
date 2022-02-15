@@ -11,13 +11,6 @@ module Uchar_token = struct
   let pp = Char_class.pp_char
   let pp_tag = pp
   let pp_set = Set.pp
-
-  open Ppxlib
-
-  let int ~loc i = Ast_builder.Default.eint ~loc i
-  let unquote ~loc = [%expr Uchar.of_scalar_exn]
-  let quote ~loc u = [%expr Uchar.of_scalar_exn [%e int ~loc (Base.Uchar.to_scalar u)]]
-  let quote_constant u = Pconst_integer (Int.to_string (Base.Uchar.to_scalar u), None)
 end
 
 module Char_token = struct
@@ -46,12 +39,6 @@ module Char_token = struct
   let pp ppf c = Fmt.pf ppf "%C" c
   let pp_tag = pp
   let pp_set = Set.pp
-
-  open Ppxlib
-
-  let unquote ~loc = [%expr fun x -> x]
-  let quote = Ast_builder.Default.echar
-  let quote_constant c = Pconst_char c
 end
 
 module Uchar = struct

@@ -89,18 +89,12 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
 
   module Codegen = struct
     let loc = Ast.loc
-    let guard = None
 
     module Quote = struct
       let string str = Ast_builder.Default.estring ~loc str
-      let int i = Ast_builder.Default.eint ~loc i
     end
 
-    type stream_context =
-      { index : int * expression
-      ; string : expression
-      ; length : expression
-      }
+    type stream_context = Token_stream.Stream.context
 
     type context =
       { stream_context : stream_context
@@ -108,24 +102,6 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
       ; next : [ `EOF | `Tok of expression | `Unknown ]
             (* rec_locus: Genletrec.locus_t; *)
       }
-
-    let stream_junk ({ index = s, d; _ } as context) k =
-      k { context with index = s + 1, d }
-    ;;
-
-    let context_index ctx : expression =
-      match ctx.index with 0, i -> i | n, i -> [%expr [%e Quote.int n] + [%e i]]
-    ;;
-
-    let stream_peek (* { index; string; length } *) ctx f =
-      let i = context_index ctx in
-      [%expr
-        if Base.Int.([%e i] >= [%e ctx.length])
-        then [%e f ctx None]
-        else (
-          let c = Base.String.unsafe_get [%e ctx.string] [%e i] in
-          [%e f ctx (Some [%expr c])])]
-    ;;
 
     type 'a mkcall =
       { mkcall : 'b. stream_context -> (stream_context -> 'a code -> 'b code) -> 'b code }
@@ -157,19 +133,9 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
      fun c token_set rhs ~otherwise ->
       let open Ast in
       let intervals = Token.Set.intervals token_set in
-      let pat_of_ival ival =
-        let x, y = Token.Interval.to_tuple ival in
-        ppat_interval (Token.quote_constant x) (Token.quote_constant y)
-      in
-      let lhs =
-        match intervals with
-        | [] -> failwith "Empty interval list not supported"
-        | ival :: ivals ->
-          List.fold ivals ~init:(pat_of_ival ival) ~f:(fun accum ival ->
-              ppat_or accum (pat_of_ival ival))
-      in
+      let lhs, guard = Token.Interval.to_pattern ~loc intervals in
       let branch = case ~lhs ~guard ~rhs in
-      let branches = [ branch; case ~lhs:[%pat? _] ~guard ~rhs:otherwise ] in
+      let branches = [ branch; case ~lhs:[%pat? _] ~guard:None ~rhs:otherwise ] in
       pexp_match c branches
    ;;
 
@@ -253,6 +219,8 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
 
     let any = Token.Set.any
 
+    module Stream = Token_stream.Stream
+
     let rec cdcomp : type a. context -> a comp -> expression =
      fun ctx -> function
       | Rec_call (({ name; body = _ } as r), k') as c ->
@@ -264,7 +232,7 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
           let () = r.name <- R (failwith "TODO") :: r.name in
           cdcomp ctx c)
       | Junk c ->
-        stream_junk ctx.stream_context (fun stream_context ->
+        Stream.staged_junk ctx.stream_context (fun stream_context ->
             let ctx = { stream_context; next = `Unknown; values = any } in
             cdcomp ctx c)
       | Peek_mem (s, k') ->
@@ -278,7 +246,7 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
             ~then_:(fun values -> cdcomp { ctx with values } (k' `Yes))
             ~else_:(fun values -> cdcomp { ctx with values } (k' `No))
         | `Unknown ->
-          stream_peek ctx.stream_context
+          Stream.staged_peek ~loc ctx.stream_context
           @@ fun stream_context -> (function
                | None -> cdcomp { ctx with stream_context; next = `EOF } (k' `Eof)
                | Some x ->
@@ -306,7 +274,7 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
                     (k `No)
                 | Some x -> cdcomp { ctx with values = tags' } (k (`Yes x))))
         | `Unknown ->
-          stream_peek ctx.stream_context (fun stream_context -> function
+          Stream.staged_peek ~loc ctx.stream_context (fun stream_context -> function
             | None -> cdcomp { ctx with stream_context; next = `EOF } (k `Eof)
             | Some x ->
               test_tag ~complete:false tagset x (function
@@ -322,20 +290,9 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
       | Return x -> x
    ;;
 
-    let stream_init f =
-      [%expr
-        fun ~index s ->
-          let n = Base.String.length s in
-          [%e
-            let ctx =
-              { index = 0, [%expr index]; string = [%expr s]; length = [%expr n] }
-            in
-            f ctx]]
-    ;;
-
     let generate : type a. a comp -> expression =
      fun expr ->
-      stream_init (fun stream_context ->
+      Stream.init ~loc (fun stream_context ->
           let ctx = { stream_context; next = `Unknown; values = any } in
           cdcomp ctx expr)
    ;;

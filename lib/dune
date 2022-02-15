@@ -1,8 +1,8 @@
 (library
  (name typed_algebraic_parsing)
  (public_name typed_algebraic_parsing)
- (libraries base diet fmt typed_algebraic_parsing_char_class uutf ppxlib)
+ (libraries base diet fmt typed_algebraic_parsing_char_class uutf)
  (inline_tests)
  (preprocess
-  (pps ppx_jane ppxlib.metaquot))
+  (pps ppx_jane))
  (wrapped false))
