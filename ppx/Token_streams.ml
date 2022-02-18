@@ -110,5 +110,27 @@ module Char = struct
             in
             f ctx]]
     ;;
+
+    type 'a mkcall =
+      { mkcall : 'b. context -> (context -> 'a code -> 'b code) -> 'b code }
+
+    (* val genletrec : locus_t -> ('a code -> 'a code) -> 'a code *)
+    (* mkbody : (context -> 'a mkcall -> 'a code) -> unit *)
+    (*
+    let genfun ~loc mkbody =
+      (* TODO add frame [%expr fun stream -> []] *)
+      mkbody (fun ctx mkcall ->
+          let call =
+            { mkcall =
+                (fun ctx h ->
+                  [%expr
+                    let x = [%e f] [%e ctx.stream] in
+                    [%e h ctx [%expr x]]])
+            }
+          in
+          mkbody ctx call)
+         *)
+
+    let genfun ~loc:_ _ = ()
   end
 end

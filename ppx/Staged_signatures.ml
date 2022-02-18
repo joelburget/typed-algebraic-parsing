@@ -22,6 +22,10 @@ module type Stream = sig
 
   (* val return : t -> 'a code -> 'a return code *)
   val init : loc:location -> (context -> _ code) -> _ code
+
+  type 'a mkcall = { mkcall : 'b. context -> (context -> 'a code -> 'b code) -> 'b code }
+
+  val genfun : loc:location -> (context -> 'a mkcall -> 'a code) -> unit
 end
 
 module type Token = sig

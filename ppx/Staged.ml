@@ -25,14 +25,14 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
     module Token = struct
       include Token
 
-      let quote ~loc:_ _ = failwith "TODO"
-      let unquote ~loc:_ = failwith "TODO"
-      let reflect _ = failwith "TODO"
+      let quote ~loc:_ _ = failwith "TODO quote"
+      let unquote ~loc:_ = failwith "TODO unquote"
+      let reflect _ = failwith "TODO reflect"
 
       module Interval = struct
         include Interval
 
-        let to_pattern ~loc:_ _ = failwith "TODO"
+        let to_pattern ~loc:_ _ = failwith "TODO to_pattern"
       end
     end
   end
@@ -210,8 +210,6 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
               >>= fun x ->
               loop >>= fun acc -> return ([%expr [%e x] :: [%e acc]] : _ list code))
       ;;
-
-      let fix _ = failwith "TODO"
     end
 
     module Parse_env = Env (struct
@@ -241,7 +239,7 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
         let p1 = parse g1 penv in
         star (data g1) p1
       | Var n -> Parse_env.lookup penv n
-      | Fix g' -> fix (fun p -> parse g' (p :: penv))
+      | Fix g' -> Ir.fix (fun p -> parse g' (p :: penv))
    ;;
 
     let compile (g : 'a typechecked) : 'a Caml.Stream.t code =
@@ -250,5 +248,5 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
   end
 
   let compile = Compile.compile
-  let parse _ = failwith "TODO"
+  let parse _ = failwith "TODO parse"
 end

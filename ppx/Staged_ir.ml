@@ -94,7 +94,9 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
       let string str = Ast_builder.Default.estring ~loc str
     end
 
-    type stream_context = Token_stream.Stream.context
+    module Stream = Token_stream.Stream
+
+    type stream_context = Stream.context
 
     type context =
       { stream_context : stream_context
@@ -103,10 +105,7 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
             (* rec_locus: Genletrec.locus_t; *)
       }
 
-    type 'a mkcall =
-      { mkcall : 'b. stream_context -> (stream_context -> 'a code -> 'b code) -> 'b code }
-
-    type 'a recid += R of 'a mkcall
+    type 'a recid += R of 'a Stream.mkcall
 
     let rec resolve = function [] -> None | R x :: _ -> Some x | _ :: xs -> resolve xs
 
@@ -219,17 +218,21 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
 
     let any = Token.Set.any
 
-    module Stream = Token_stream.Stream
-
     let rec cdcomp : type a. context -> a comp -> expression =
      fun ctx -> function
-      | Rec_call (({ name; body = _ } as r), k') as c ->
+      | Rec_call (({ name; body } as r), k') as c ->
         (match resolve name with
         | Some { mkcall } ->
+          (* mkcall registered -- we can generate this function *)
           mkcall ctx.stream_context (fun stream_context x ->
               cdcomp { stream_context; values = any; next = `Unknown } (k' x))
         | None ->
-          let () = r.name <- R (failwith "TODO") :: r.name in
+          (* mkcall not yet registered *)
+          Stream.genfun ~loc (fun stream_context mkcall ->
+              r.name <- R mkcall :: r.name;
+              let ctx = { values = Token.Set.any; next = `Unknown; stream_context } in
+              let self = Rec_call (r, fun v -> Return v) in
+              cdcomp ctx (body self));
           cdcomp ctx c)
       | Junk c ->
         Stream.staged_junk ctx.stream_context (fun stream_context ->
