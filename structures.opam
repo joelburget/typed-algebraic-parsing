@@ -9,7 +9,7 @@ homepage: "https://github.com/joelburget/typed-algebraic-parsing"
 bug-reports: "https://github.com/joelburget/typed-algebraic-parsing/issues"
 depends: [
   "dune" {>= "2.9"}
-  "fmt"
+  "fmt" {>= "0.9.0"}
   "odoc" {with-doc}
 ]
 build: [
