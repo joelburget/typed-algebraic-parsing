@@ -4,5 +4,4 @@
  (libraries base diet fmt structures)
  (inline_tests)
  (preprocess
-  (pps ppx_jane))
- (wrapped false))
+  (pps ppx_jane)))

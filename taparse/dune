@@ -4,5 +4,4 @@
  (libraries base diet fmt char-class uutf)
  (inline_tests)
  (preprocess
-  (pps ppx_jane))
- (wrapped false))
+  (pps ppx_jane)))

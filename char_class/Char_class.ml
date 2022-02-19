@@ -241,7 +241,7 @@ module Infix = struct
   let ( - ) = asymmetric_diff
 end
 
-module Laws = Laws.Make (struct
+module Laws = Structures.Laws.Make (struct
   include T
   module Infix = Infix
 

@@ -34,7 +34,7 @@ module Interval : sig
   val to_tuple : interval -> Uchar.t * Uchar.t
 end
 
-module Laws : Laws.S with type t = t
+module Laws : Structures.Laws.S with type t = t
 
 val pp : t Fmt.t
 val pp_char : Uchar.t Fmt.t

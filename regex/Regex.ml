@@ -186,7 +186,7 @@ module Infix = struct
   let ( * ) = ( && )
 end
 
-module Laws = Laws.Make (struct
+module Laws = Structures.Laws.Make (struct
   include T
   module Infix = Infix
 

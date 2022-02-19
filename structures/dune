@@ -1,5 +1,4 @@
 (library
  (name structures)
  (public_name structures)
- (libraries fmt)
- (wrapped false))
+ (libraries fmt))

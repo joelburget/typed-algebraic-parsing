@@ -10,7 +10,7 @@ module Infix : sig
   val ( * ) : t -> t -> t
 end
 
-module Laws : Laws.S with type t = t
+module Laws : Structures.Laws.S with type t = t
 
 val pp : t Fmt.t
 

@@ -1,4 +1,5 @@
 open Ppxlib
+open Taparse
 
 type _ code = expression
 
