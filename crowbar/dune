@@ -1,3 +1,3 @@
 (executable
  (name crowbar)
- (libraries crowbar typed_algebraic_parsing typed_algebraic_parsing_regex))
+ (libraries crowbar taparse taparse-regex))

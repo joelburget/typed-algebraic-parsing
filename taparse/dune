@@ -1,7 +1,7 @@
 (library
- (name typed_algebraic_parsing)
- (public_name typed_algebraic_parsing)
- (libraries base diet fmt typed_algebraic_parsing_char_class uutf)
+ (name taparse)
+ (public_name taparse)
+ (libraries base diet fmt char-class uutf)
  (inline_tests)
  (preprocess
   (pps ppx_jane))

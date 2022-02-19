@@ -1,12 +1,8 @@
 (library
- (name ppx_tap)
- (public_name typed_algebraic_parsing.ppx)
+ (name ppx_taparse)
+ (public_name ppx_taparse)
  (inline_tests)
  (kind ppx_rewriter)
  (preprocess
   (pps ppx_jane ppxlib.metaquot))
- (libraries
-  base
-  typed_algebraic_parsing
-  typed_algebraic_parsing_regex
-  ppxlib))
+ (libraries base taparse taparse-regex ppxlib))

@@ -1,7 +1,7 @@
 (library
- (name typed_algebraic_parsing_char_class)
- (public_name typed_algebraic_parsing.char_class)
- (libraries base diet fmt typed_algebraic_parsing_structures)
+ (name char_class)
+ (public_name char-class)
+ (libraries base diet fmt structures)
  (inline_tests)
  (preprocess
   (pps ppx_jane))

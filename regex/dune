@@ -1,12 +1,7 @@
 (library
- (name typed_algebraic_parsing_regex)
- (public_name typed_algebraic_parsing.regex)
- (libraries
-  base
-  diet
-  fmt
-  typed_algebraic_parsing_char_class
-  typed_algebraic_parsing_structures)
+ (name taparse_regex)
+ (public_name taparse-regex)
+ (libraries base diet fmt char-class structures)
  (inline_tests)
  (preprocess
   (pps ppx_jane))
