@@ -37,7 +37,7 @@ end = struct
           Stream.junk s;
           c')
         else
-          parse_error "Unexpected token '%a' (expected '%a')" Token.pp c' Token.pp_set set
+          parse_error "Unexpected token '%a' (expected '%a')" Token.pp c' Token.Set.pp set
     ;;
 
     let bot _ = parse_error "bottom"

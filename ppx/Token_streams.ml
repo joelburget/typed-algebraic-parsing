@@ -42,7 +42,6 @@ module Char_token = struct
   let tag tok = tok
   let pp ppf c = Fmt.pf ppf "%C" c
   let pp_tag = pp
-  let pp_set = Set.pp
 
   open Ppxlib
 

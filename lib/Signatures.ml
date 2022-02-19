@@ -26,7 +26,6 @@ module type Token = sig
   val tag : t -> tag
   val pp : t Fmt.t
   val pp_tag : tag Fmt.t
-  val pp_set : set Fmt.t
 
   module Set : sig
     type t = set
