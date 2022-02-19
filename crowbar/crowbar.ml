@@ -25,16 +25,25 @@ let add_all (module M : S) =
     add_test ~name:"right_distributive" [ gen; gen; gen ] (fun a b c ->
         check (right_distributive a b c)));
   M.Lattice.(
-    add_test ~name:"idempotent_union" [ gen ] (fun a -> check (idempotent_union a));
-    add_test ~name:"idempotent_inter" [ gen ] (fun a -> check (idempotent_inter a));
-    add_test ~name:"join_bot" [ gen ] (fun a -> check (join_bot a));
+    add_test ~name:"meet_associative" [ gen; gen; gen ] (fun a b c ->
+        check (meet_associative a b c));
+    add_test ~name:"meet_commutative" [ gen; gen ] (fun a b ->
+        check (meet_commutative a b));
     add_test ~name:"meet_top" [ gen ] (fun a -> check (meet_top a));
+    add_test ~name:"meet_idempotent" [ gen ] (fun a -> check (meet_idempotent a));
+    add_test ~name:"meet_top" [ gen ] (fun a -> check (meet_top a));
+    add_test ~name:"join_associative" [ gen; gen; gen ] (fun a b c ->
+        check (join_associative a b c));
+    add_test ~name:"join_commutative" [ gen; gen ] (fun a b ->
+        check (join_commutative a b));
+    add_test ~name:"join_idempotent" [ gen ] (fun a -> check (join_idempotent a));
+    add_test ~name:"join_bot" [ gen ] (fun a -> check (join_bot a));
     add_test ~name:"absorption_1" [ gen; gen ] (fun a b -> check (absorption_1 a b));
     add_test ~name:"absorption_2" [ gen; gen ] (fun a b -> check (absorption_2 a b));
-    add_test ~name:"distribute_over_union" [ gen; gen; gen ] (fun a b c ->
-        check (distribute_over_union a b c));
-    add_test ~name:"distribute_over_inter" [ gen; gen; gen ] (fun a b c ->
-        check (distribute_over_inter a b c)));
+    add_test ~name:"distribute_over_join" [ gen; gen; gen ] (fun a b c ->
+        check (distribute_over_join a b c));
+    add_test ~name:"distribute_over_meet" [ gen; gen; gen ] (fun a b c ->
+        check (distribute_over_meet a b c)));
   add_test ~name:"double_negation" [ gen ] (fun a -> check (M.double_negation a))
 ;;
 
