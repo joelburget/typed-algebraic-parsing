@@ -1,3 +1,4 @@
+(** A magma is a type with a single operation and no laws. *)
 module type Magma = sig
   type t
 
@@ -9,7 +10,9 @@ module type Magma = sig
   end
 end
 
-(** A semigroup is an associative magma. *)
+(** A semigroup is an associative {!Magma}.
+
+    In other words, types with a single operation which must be associative. *)
 module type Semigroup = sig
   include Magma
 
@@ -21,7 +24,7 @@ module type Semigroup = sig
   end
 end
 
-(** A monoid is a semigroup with an identity element. *)
+(** A monoid is a {!Semigroup} with an identity element. *)
 module type Monoid = sig
   include Semigroup
 
@@ -38,7 +41,7 @@ module type Monoid = sig
   end
 end
 
-(** A group is a monoid with inverses. *)
+(** A group is a {!Monoid} with inverses. *)
 module type Group = sig
   include Monoid
 
@@ -55,7 +58,7 @@ module type Group = sig
   end
 end
 
-(** An abelian group is a group whose operation is commutative. *)
+(** An abelian group is a {!Group} whose operation is commutative. *)
 module type Abelian_group = sig
   include Group
 

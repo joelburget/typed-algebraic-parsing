@@ -61,14 +61,16 @@ module type Distributive_lattice_laws = sig
   val distribute_over_meet : t -> t -> t -> bool
 end
 
-module type Semilattice = sig
+(** See {!Meet_semilattice} / {!Join_semilattice}. *)
+module type Semilattice_base = sig
   type t
 
   val ( = ) : t -> t -> bool
 end
 
+(** A partially ordered set with a meet operation. *)
 module type Meet_semilattice = sig
-  include Semilattice
+  include Semilattice_base
 
   (** Meet, ie greatest lower bound, infimum, "and", or intersection. *)
   val ( && ) : t -> t -> t
@@ -76,6 +78,7 @@ module type Meet_semilattice = sig
   module Laws : Meet_semilattice_laws
 end
 
+(** A bounded {!Meet_semilattice} with a top element. *)
 module type Bounded_meet_semilattice = sig
   include Meet_semilattice
 
@@ -85,8 +88,9 @@ module type Bounded_meet_semilattice = sig
   module Laws : Bounded_meet_semilattice_laws
 end
 
+(** A partially ordered set with a join operation. *)
 module type Join_semilattice = sig
-  include Semilattice
+  include Semilattice_base
 
   (** Join; ie least upper bound, supremum, "or", or union. *)
   val ( || ) : t -> t -> t
@@ -94,6 +98,7 @@ module type Join_semilattice = sig
   module Laws : Join_semilattice_laws
 end
 
+(** A bounded {!Join_semilattice} with a least element. *)
 module type Bounded_join_semilattice = sig
   include Join_semilattice
 
@@ -103,12 +108,15 @@ module type Bounded_join_semilattice = sig
   module Laws : Bounded_join_semilattice_laws
 end
 
+(** A partially ordered set where every pair of elements has both a join
+    ({!Join_semilattice.( || )}) and a meet ({!Meet_semilattice.( && )}). *)
 module type Lattice = sig
   include Meet_semilattice
   include Join_semilattice with type t := t
   module Laws : Lattice_laws
 end
 
+(** A {!Lattice} which satisfies {!Distributive_lattice_laws}. *)
 module type Distributive_lattice = sig
   include Lattice
   module Laws : Distributive_lattice_laws

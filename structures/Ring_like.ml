@@ -1,10 +1,18 @@
 module type S = sig
   type t
 
+  (** An additive identity: analogous to [0]. *)
   val additive_ident : t
+
+  (** A multiplicative identity: analogous to [1]. *)
   val multiplicative_ident : t
+
   val ( = ) : t -> t -> bool
+
+  (** A binary operation analogous to addition. *)
   val ( + ) : t -> t -> t
+
+  (** A binary operation analogous to multiplication. *)
   val ( * ) : t -> t -> t
 end
 
