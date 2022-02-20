@@ -69,11 +69,11 @@ end
 type interval = Interval_set.interval
 
 module Interval = struct
-  let x, y = Interval_set.Interval.(x, y)
+  let first, last = Interval_set.Interval.(x, y)
 
   type t = interval
 
-  let to_tuple ival = x ival, y ival
+  let to_tuple ival = first ival, last ival
 end
 
 module T = struct
@@ -268,6 +268,16 @@ module Char = struct
   let of_list xs = of_list (Base.List.map ~f:Uchar.of_char xs)
 end
 
+module Common = struct
+  let digit = Char.range '0' '9'
+  let lowercase = Char.range 'a' 'z'
+  let uppercase = Char.range 'A' 'Z'
+  let alpha = Infix.(lowercase + uppercase)
+  let alphanum = Infix.(alpha + digit)
+  let print = Char.range ' ' '~'
+  let whitespace = Char.of_list [ ' '; '\t'; '\r'; '\n' ]
+end
+
 let%test_module _ =
   (module struct
     let c = Char.singleton 'c'
@@ -407,7 +417,7 @@ let%test_module _ =
 
     let%expect_test "intervals" =
       let pp_interval ppf ival =
-        let x, y = Interval.(x ival, y ival) in
+        let x, y = Interval.(first ival, last ival) in
         Fmt.pf ppf "%a, %a" pp_char x pp_char y
       in
       let pp = Fmt.(brackets (list ~sep:semi pp_interval)) in

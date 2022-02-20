@@ -16,21 +16,21 @@ include Base.Sexpable.S with type t := t
 module Infix : sig
   include Base.Comparable.Infix with type t := t
 
-  (** [union] *)
+  (** {!union} *)
   val ( + ) : t -> t -> t
 
-  (** [inter] *)
+  (** {!inter} *)
   val ( * ) : t -> t -> t
 
-  (** [asymmetric_diff] *)
+  (** {!asymmetric_diff} *)
   val ( - ) : t -> t -> t
 end
 
 module Interval : sig
   type t = interval
 
-  val x : interval -> Uchar.t
-  val y : interval -> Uchar.t
+  val first : interval -> Uchar.t
+  val last : interval -> Uchar.t
   val to_tuple : interval -> Uchar.t * Uchar.t
 end
 
@@ -42,7 +42,7 @@ val pp_char : Uchar.t Fmt.t
 (** The empty character class [\[\]] *)
 val empty : t
 
-(** Any character [.]. *)
+(** Any character ([.]). *)
 val any : t
 
 (** A single unicode character. *)
@@ -65,13 +65,13 @@ val of_string : string -> t
     - [\[^c\] - \[^cd\] = d] *)
 val asymmetric_diff : t -> t -> t
 
-(** [\[^...\] -> \[...\]], [\[...\] -> \[^...\]] *)
+(** Negate the given class. [\[^...\] -> \[...\]], [\[...\] -> \[^...\]] *)
 val negate : t -> t
 
-(** Eg [\[ab\] || \[ace\] -> \[abce\]] *)
+(** Union of classes, eg [\[ab\] || \[ace\] -> \[abce\]] *)
 val union : t -> t -> t
 
-(** Eg [\[ab\] && \[ace\] -> \[a\]] *)
+(** Intersection of classes, eg [\[ab\] && \[ace\] -> \[a\]] *)
 val inter : t -> t -> t
 
 (** Is the character contained in this class? *)
@@ -92,6 +92,7 @@ val choose_exn : t -> Uchar.t
 (** A list of all intervals *)
 val intervals : t -> interval list
 
+(** Helpers for non-unicode [char]s. *)
 module Char : sig
   type element = char
 
@@ -106,4 +107,28 @@ module Char : sig
 
   (** Any of the characters in the list. *)
   val of_list : char list -> t
+end
+
+(** Common ranges (digit, alphanum, etc). *)
+module Common : sig
+  (** '0' - '9' *)
+  val digit : t
+
+  (** 'a' - 'z' *)
+  val lowercase : t
+
+  (** 'A' - 'Z' *)
+  val uppercase : t
+
+  (** 'a' - 'z', 'A' - 'Z' *)
+  val alpha : t
+
+  (** 'a' - 'z', 'A' - 'Z', '0' - '9' *)
+  val alphanum : t
+
+  (** Print characters (ASCII 32 (' ') - 126 ('~')). *)
+  val print : t
+
+  (** ' ', '\t', '\r', '\n' *)
+  val whitespace : t
 end
