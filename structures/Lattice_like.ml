@@ -1,125 +1,89 @@
-module type Meet_semilattice_laws = sig
-  type t
+module Meet_semilattice_laws (T : Lattice_like_sigs.Meet_semilattice) = struct
+  open T
+  open Util.Make (T)
 
-  (** [a && (b && c) = (a && b) && c] *)
-  val meet_associative : t -> t -> t -> bool
-
-  (** [a && b = b && a] *)
-  val meet_commutative : t -> t -> bool
-
-  (** [a && a = a] *)
-  val meet_idempotent : t -> bool
+  let meet_associative a b c = mk3 a b c (a && b && c) (a && b && c)
+  let meet_commutative a b = mk2 a b (a && b) (b && a)
+  let meet_idempotent a = mk1 a (a && a) a
 end
 
-module type Bounded_meet_semilattice_laws = sig
-  include Meet_semilattice_laws
+module Bounded_meet_semilattice_laws (T : Lattice_like_sigs.Bounded_meet_semilattice) =
+struct
+  open T
+  open Util.Make (T)
+  include Meet_semilattice_laws (T)
 
-  (** [a && top = a] *)
-  val meet_top : t -> bool
+  let meet_top a = mk1 a (a && top) a
 end
 
-module type Join_semilattice_laws = sig
-  type t
+module Join_semilattice_laws (T : Lattice_like_sigs.Join_semilattice) = struct
+  open T
+  open Util.Make (T)
 
-  (** [a || (b || c) = (a || b) || c] *)
-  val join_associative : t -> t -> t -> bool
-
-  (** [a || b = b || a] *)
-  val join_commutative : t -> t -> bool
-
-  (** [a || a = a] *)
-  val join_idempotent : t -> bool
+  let join_associative a b c = mk3 a b c (a || b || c) (a || b || c)
+  let join_commutative a b = mk2 a b (a || b) (b || a)
+  let join_idempotent a = mk1 a (a || a) a
 end
 
-module type Bounded_join_semilattice_laws = sig
-  include Join_semilattice_laws
+module Bounded_join_semilattice_laws (T : Lattice_like_sigs.Bounded_join_semilattice) =
+struct
+  open T
+  open Util.Make (T)
+  include Join_semilattice_laws (T)
 
-  (** [a || bot = a] *)
-  val join_bot : t -> bool
+  let join_bot a = mk1 a (a || bot) a
 end
 
-module type Lattice_laws = sig
-  type t
+module Lattice_laws (T : Lattice_like_sigs.Lattice) = struct
+  open T
+  open Util.Make (T)
+  include Meet_semilattice_laws (T)
+  include Join_semilattice_laws (T)
 
-  include Bounded_meet_semilattice_laws with type t := t
-  include Bounded_join_semilattice_laws with type t := t
-
-  (** [a || (a && b) = a] *)
-  val absorption_1 : t -> t -> bool
-
-  (** [a && (a || b) = a] *)
-  val absorption_2 : t -> t -> bool
+  let absorption_1 a b = mk2 a b (a || (a && b)) a
+  let absorption_2 a b = mk2 a b (a && (a || b)) a
 end
 
-module type Distributive_lattice_laws = sig
-  include Lattice_laws
+module Bounded_lattice_laws (T : Lattice_like_sigs.Bounded_lattice) = struct
+  open T
+  open Util.Make (T)
+  include Bounded_meet_semilattice_laws (T)
+  include Bounded_join_semilattice_laws (T)
 
-  (** [a || (b && c) = (a || b) && (a || c)] *)
-  val distribute_over_join : t -> t -> t -> bool
-
-  (** [a && (b || c) = (a && b) || (a && c)] *)
-  val distribute_over_meet : t -> t -> t -> bool
+  let absorption_1 a b = mk2 a b (a || (a && b)) a
+  let absorption_2 a b = mk2 a b (a && (a || b)) a
 end
 
-(** See {!Meet_semilattice} / {!Join_semilattice}. *)
-module type Semilattice_base = sig
-  type t
+module Complemented_lattice_laws (T : Lattice_like_sigs.Complemented_lattice) = struct
+  open T
+  open Util.Make (T)
+  include Bounded_lattice_laws (T)
 
-  val ( = ) : t -> t -> bool
+  let top_complement a = mk1 a (a || complement a) top
+  let bot_complement a = mk1 a (a && complement a) bot
 end
 
-(** A partially ordered set with a meet operation. *)
-module type Meet_semilattice = sig
-  include Semilattice_base
+module Distributive_lattice_laws (T : Lattice_like_sigs.Distributive_lattice) = struct
+  open T
+  open Util.Make (T)
+  include Lattice_laws (T)
 
-  (** Meet, ie greatest lower bound, infimum, "and", or intersection. *)
-  val ( && ) : t -> t -> t
-
-  module Laws : Meet_semilattice_laws
+  let distribute_over_join a b c = mk3 a b c (a || (b && c)) ((a || b) && (a || c))
+  let distribute_over_meet a b c = mk3 a b c (a && (b || c)) ((a && b) || (a && c))
 end
 
-(** A bounded {!Meet_semilattice} with a top element. *)
-module type Bounded_meet_semilattice = sig
-  include Meet_semilattice
+module Heyting_algebra_laws (T : Lattice_like_sigs.Heyting_algebra) = struct
+  open T
+  open Util.Make (T)
+  include Distributive_lattice_laws (T)
 
-  (** A greatest element (top). *)
-  val top : t
-
-  module Laws : Bounded_meet_semilattice_laws
+  let self_implication a = mk1 a (a => a) top
+  let absorption_3 a b = mk2 a b (a && a => b) (a && b)
+  let absorption_4 a b = mk2 a b (b && a => b) b
+  let distribute_over_implication a b c = mk3 a b c (a => (b && c)) (a => b && a => c)
 end
 
-(** A partially ordered set with a join operation. *)
-module type Join_semilattice = sig
-  include Semilattice_base
-
-  (** Join; ie least upper bound, supremum, "or", or union. *)
-  val ( || ) : t -> t -> t
-
-  module Laws : Join_semilattice_laws
+module Boolean_algebra_laws (T : Lattice_like_sigs.Boolean_algebra) = struct
+  include Heyting_algebra_laws (T)
+  include Complemented_lattice_laws (T)
 end
-
-(** A bounded {!Join_semilattice} with a least element. *)
-module type Bounded_join_semilattice = sig
-  include Join_semilattice
-
-  (** A least element (bottom). *)
-  val bot : t
-
-  module Laws : Bounded_join_semilattice_laws
-end
-
-(** A partially ordered set where every pair of elements has both a join
-    ({!Join_semilattice.( || )}) and a meet ({!Meet_semilattice.( && )}). *)
-module type Lattice = sig
-  include Meet_semilattice
-  include Join_semilattice with type t := t
-  module Laws : Lattice_laws
-end
-
-(** A {!Lattice} which satisfies {!Distributive_lattice_laws}. *)
-module type Distributive_lattice = sig
-  include Lattice
-  module Laws : Distributive_lattice_laws
-end
-
-(* TODO: complete lattice, Heyting algebra, Boolean algebra *)
