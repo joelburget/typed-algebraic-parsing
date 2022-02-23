@@ -7,7 +7,12 @@ module Uchar_token = struct
 
   let tag tok = tok
   let pp = Char_class.pp_char
-  let pp_tag = pp
+
+  module Tag = struct
+    type t = Uchar.t
+
+    let pp, compare, ( = ) = pp, compare, ( = )
+  end
 end
 
 module Char_token = struct
@@ -24,7 +29,12 @@ module Char_token = struct
 
   let tag tok = tok
   let pp ppf c = Fmt.pf ppf "%C" c
-  let pp_tag = pp
+
+  module Tag = struct
+    type t = tag
+
+    let pp, compare, ( = ) = pp, compare, ( = )
+  end
 end
 
 module Uchar = struct

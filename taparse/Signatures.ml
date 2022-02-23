@@ -29,17 +29,24 @@ module type Token_set = sig
   end
 end
 
+module type Token_tag = sig
+  type t
+
+  val compare : t -> t -> int
+  val ( = ) : t -> t -> bool
+  val pp : t Fmt.t
+end
+
 (** A single token and set of tokens. *)
 module type Token = sig
   type t
-  type tag
   type set
+  type tag
 
-  val compare : tag -> tag -> int
-  val ( = ) : tag -> tag -> bool
-  val tag : t -> tag
+  module Tag : Token_tag with type t = tag
+
+  val tag : t -> Tag.t
   val pp : t Fmt.t
-  val pp_tag : tag Fmt.t
 
   module Set : Token_set with type t = set and type tag := tag
 end
