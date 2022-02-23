@@ -29,18 +29,30 @@ module type Stream = sig
   val genfun : loc:location -> (context -> 'a mkcall -> 'a code) -> unit
 end
 
+module type Interval = sig
+  type t
+  type tag
+
+  val to_tuple : t -> tag * tag
+  val to_pattern : loc:location -> t list -> pattern * expression option
+end
+
 module type Token = sig
   include Signatures.Token
+
+  type interval
 
   val unquote : loc:location -> expression
   val quote : loc:location -> tag -> expression
   val reflect : expression -> t option
 
-  module Interval : sig
-    include Signatures.Interval with type t = interval and type tag := tag
+  module Set : sig
+    include Signatures.Token_set with type t = set and type tag := tag
 
-    val to_pattern : loc:location -> t list -> pattern * expression option
+    val intervals : t -> interval list
   end
+
+  module Interval : Interval with type t = interval and type tag := tag
 end
 
 (** Similar to [Signatures.Token_stream] but for code generation. *)

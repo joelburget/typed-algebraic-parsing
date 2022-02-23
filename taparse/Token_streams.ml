@@ -1,11 +1,9 @@
 module Uchar_token = struct
   include Base.Uchar
   module Set = Char_class
-  module Interval = Char_class.Interval
 
   type tag = Uchar.t
   type set = Char_class.t
-  type interval = Char_class.interval
 
   let tag tok = tok
   let pp = Char_class.pp_char
@@ -16,20 +14,10 @@ module Char_token = struct
   include Base.Char
 
   type tag = char
-  type interval = Char_class.interval
 
   module Set = struct
     include Char_class
     include Char_class.Char
-  end
-
-  module Interval = struct
-    type t = interval
-
-    let to_tuple ival =
-      let x, y = Char_class.Interval.to_tuple ival in
-      Uchar.to_char x, Uchar.to_char y
-    ;;
   end
 
   type set = Set.t

@@ -7,11 +7,26 @@ module type Stream = sig
   val junk : t -> unit
 end
 
-module type Interval = sig
+module type Token_set = sig
   type t
   type tag
 
-  val to_tuple : t -> tag * tag
+  val pp : t Fmt.t
+  val any : t
+  val empty : t
+  val singleton : tag -> t
+  val is_empty : t -> bool
+  val ( = ) : t -> t -> bool
+  val inter : t -> t -> t
+  val union : t -> t -> t
+  val mem : t -> tag -> bool
+  val is_subset : t -> t -> bool
+  val of_list : tag list -> t
+
+  module Infix : sig
+    (** [asymmetric_diff] *)
+    val ( - ) : t -> t -> t
+  end
 end
 
 (** A single token and set of tokens. *)
@@ -19,7 +34,6 @@ module type Token = sig
   type t
   type tag
   type set
-  type interval
 
   val compare : tag -> tag -> int
   val ( = ) : tag -> tag -> bool
@@ -27,29 +41,7 @@ module type Token = sig
   val pp : t Fmt.t
   val pp_tag : tag Fmt.t
 
-  module Set : sig
-    type t = set
-
-    val pp : t Fmt.t
-    val any : t
-    val empty : t
-    val singleton : tag -> t
-    val is_empty : t -> bool
-    val ( = ) : t -> t -> bool
-    val inter : t -> t -> t
-    val union : t -> t -> t
-    val mem : t -> tag -> bool
-    val is_subset : t -> t -> bool
-    val of_list : tag list -> t
-    val intervals : t -> interval list
-
-    module Infix : sig
-      (** [asymmetric_diff] *)
-      val ( - ) : t -> t -> t
-    end
-  end
-
-  module Interval : Interval with type t = interval and type tag := tag
+  module Set : Token_set with type t = set and type tag := tag
 end
 
 (** A stream of tokens. *)
