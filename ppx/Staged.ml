@@ -110,6 +110,12 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
     type token_tag = Token.tag
     type 'a t = { tdb : 'ctx. 'ctx ctx -> ('ctx, 'a, unit) grammar }
 
+    (* Normalize [Alt]s. Traverse tree of [Alt]s:
+     - collect all concrete [Tok]s ([toks]) and
+     - everything else ([summands])
+
+     Linearize tree to a list, terminated by a single [Tok] (if there is one).
+     *)
     let crush : type ctx a x. (ctx, a, x) Grammar.t -> (ctx, a, x) Grammar.t =
       let rec loop
           (toks : Token.tag list)
@@ -128,7 +134,7 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
         | _, Tok t -> t @ toks, summands, failure_msgs
         | e -> toks, e :: summands, failure_msgs
       in
-      let alt failure_msgs e es =
+      let alt failure_msgs es e =
         let failure_msg =
           match failure_msgs with
           | [] -> None
@@ -136,9 +142,9 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
           | msgs -> Some Fmt.(str "messages: %a" (brackets (list ~sep:comma string)) msgs)
         in
         List.fold_right
-          ~f:(fun (d, x) y -> Grammar.Alt (failure_msg, (d, x), (d, y)))
-          ~init:es
-          e
+          ~f:(fun ((d, _) as dx) y -> Grammar.Alt (failure_msg, dx, (d, y)))
+          ~init:e
+          es
       in
       fun ((d, _) as e) ->
         ( d
