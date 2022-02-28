@@ -20,7 +20,7 @@ module type Token_set = sig
   val inter : t -> t -> t
   val union : t -> t -> t
   val mem : t -> tag -> bool
-  val is_subset : t -> t -> bool
+  val is_subset : t -> of_:t -> bool
   val of_list : tag list -> t
 
   module Infix : sig

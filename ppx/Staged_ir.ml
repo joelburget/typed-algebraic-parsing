@@ -269,7 +269,7 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
           if Token.Set.(is_empty (inter ctx.values tagset))
           then cdcomp ctx (k `No)
           else (
-            let complete = Token.Set.is_subset ctx.values tagset in
+            let complete = Token.Set.is_subset ctx.values ~of_:tagset in
             let tags' = Token.Set.inter ctx.values tagset in
             test_tag ~complete tags' x (function
                 | None ->

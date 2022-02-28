@@ -81,7 +81,7 @@ val mem : t -> Uchar.t -> bool
 val is_empty : t -> bool
 
 (** Is [a] a subset of [b]? *)
-val is_subset : t -> t -> bool
+val is_subset : t -> of_:t -> bool
 
 (** Choose any character from this class. *)
 val choose : t -> Uchar.t option

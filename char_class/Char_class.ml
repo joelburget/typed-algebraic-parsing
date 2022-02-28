@@ -137,7 +137,7 @@ let mem t c =
 ;;
 
 let is_empty = function Pos iset when Interval_set.is_empty iset -> true | _ -> false
-let is_subset a b = inter a b = b
+let is_subset a ~of_ = inter a of_ = of_
 
 let choose = function
   | Pos iset ->
@@ -366,7 +366,7 @@ let%test_module _ =
     ;;
 
     let%expect_test "is_subset" =
-      let go a b = is_subset a b |> Fmt.pr "%b@." in
+      let go a of_ = is_subset a ~of_ |> Fmt.pr "%b@." in
       go c empty;
       go c d;
       go cd d;
