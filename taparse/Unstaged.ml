@@ -1,17 +1,13 @@
 open Base
 open Prelude
 
-module Make (Token_stream : Signatures.Token_stream) : sig
-  include
-    Signatures.Parser
-      with type token = Token_stream.token
-       and type token_tag = Token_stream.token_tag
-       and type stream = Token_stream.Stream.t
-       and type 'a parser = Token_stream.Stream.t -> 'a
-       and type 'a v = 'a
-
-  val parse : ('ctx, 'a, Type.t) Grammar.t -> 'ctx Parse_env.t -> 'a parser
-end = struct
+module Make (Token_stream : Signatures.Token_stream) :
+  Signatures.Parser
+    with type token = Token_stream.token
+     and type token_tag = Token_stream.token_tag
+     and type stream = Token_stream.Stream.t
+     and type 'a parser = Token_stream.Stream.t -> 'a
+     and type 'a v = 'a = struct
   module Token = Token_stream.Token
   module Stream = Token_stream.Stream
 
@@ -230,4 +226,16 @@ end = struct
     let star g = { tdb = (fun p -> (), Star (g.tdb p)) }
     let fail msg = { tdb = (fun _ -> (), Fail msg) }
   end
+
+  module Construction = struct
+    include Construction'
+    include Library.Make (Construction')
+  end
+
+  let typecheck : type a. a Construction.t -> (unit, a, Type.t) Grammar.t =
+   fun { tdb } -> Grammar.typeof [] (tdb [])
+ ;;
+
+  let parse'_exn grammar env = parse grammar env []
+  let parse_exn construction = parse (typecheck construction) Parse_env.[] []
 end

@@ -17,6 +17,25 @@ module Make (Construction : Signatures.Construction with type 'a v = 'a) = struc
   let sep_by sep p = option (sep_by1 sep p) ==> function None -> [] | Some xs -> xs
   let ( <* ) p1 p2 = p1 ++ p2 ==> fst
   let ( *> ) p1 p2 = p1 ++ p2 ==> snd
+  let ( <|> ) a b = alt a b
+  let ( >>| ) p f = map f p
+  let ( <$> ) f p = map f p
+  let ( <*> ) fp p = fp ++ p ==> fun (f, a) -> f a
+
+  module Let_syntax = struct
+    let return a = eps a
+    let map p ~f = map f p
+    let both a b = seq a b
+    let map2 a b ~f = map ~f:(fun (a, b) -> f a b) (seq a b)
+    let map3 a b c ~f = map ~f:(fun (a, (b, c)) -> f a b c) (seq a (seq b c))
+
+    let map4 a b c d ~f =
+      map ~f:(fun (a, (b, (c, d))) -> f a b c d) (seq a (seq b (seq c d)))
+    ;;
+  end
+
+  let ( let+ ) p f = map f p
+  let ( and+ ) a b = seq a b
 
   let infixr op base =
     let process (accum, rhs) =

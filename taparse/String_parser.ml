@@ -32,6 +32,10 @@ let charset ~failure_msg s =
 let lower = charset ~failure_msg:"lower" "abcdefghijklmnopqrstuvwxyz"
 let upper = charset ~failure_msg:"upper" "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 let string_of_uchars chars = chars |> List.map ~f:Uchar.to_char_exn |> String.of_char_list
+let make_paren_parser c1 c2 p = ctok c1 ++ p ++ ctok c2 ==> fun ((_, x), _) -> x
+let braces p = make_paren_parser '{' '}' p
+let parens p = make_paren_parser '(' ')' p
+let brackets p = make_paren_parser '[' ']' p
 
 module Sexp = struct
   type sexp =
@@ -43,7 +47,6 @@ module Sexp = struct
     function Sym str -> string ppf str | Seq sexps -> parens (list pp ~sep:sp) ppf sexps
   ;;
 
-  let paren p = ctok '(' ++ p ++ ctok ')' ==> fun ((_, x), _) -> x
   let word = plus lower ==> string_of_uchars
 
   let sexp =
@@ -51,7 +54,7 @@ module Sexp = struct
         choice
           ~failure_msg:"word or parens"
           [ (word ==> fun sym -> Sym sym)
-          ; (paren (sep_by (ctok ' ') sexp) ==> fun s -> Seq s)
+          ; (parens (sep_by (ctok ' ') sexp) ==> fun s -> Seq s)
           ])
   ;;
 end
@@ -115,16 +118,10 @@ let%test_module _ =
          guarded: true} |}]
     ;;
 
-    let typecheck : type a. a Construction.t -> (unit, a, Type.t) Grammar.t =
-     fun { tdb } -> Grammar.typeof [] (tdb [])
-   ;;
-
-    let parse p = parse (typecheck p) Parse_env.[]
-
     let go p pp str =
       let stream = Stream.of_string str in
       try
-        let parsed = parse p stream in
+        let parsed = parse_exn p stream in
         match Stream.peek stream with
         | None -> Fmt.pr "@[%a@]@." pp parsed
         | Some _ -> Fmt.pr "@[parsed with leftovers:@ %a@]@." pp parsed
@@ -164,9 +161,9 @@ let%test_module _ =
     ;;
 
     let%expect_test "alt" =
-      go (alt (ctok 'a') (ctok 'b')) Token.pp "a";
-      go (alt (ctok 'a') (ctok 'b')) Token.pp "b";
-      go (alt (ctok 'a') (ctok 'b')) Token.pp "c";
+      go (ctok 'a' <|> ctok 'b') Token.pp "a";
+      go (ctok 'a' <|> ctok 'b') Token.pp "b";
+      go (ctok 'a' <|> ctok 'b') Token.pp "c";
       [%expect {|
         a
         b

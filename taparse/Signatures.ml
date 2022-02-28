@@ -172,6 +172,22 @@ module type Library = sig
   val sep_by1 : 'a t -> 'b t -> 'b list t
   val ( <* ) : 'a t -> _ t -> 'a t
   val ( *> ) : _ t -> 'a t -> 'a t
+  val ( <|> ) : 'a t -> 'a t -> 'a t
+  val ( >>| ) : 'a t -> ('a -> 'b) -> 'b t
+  val ( <$> ) : ('a -> 'b) -> 'a t -> 'b t
+  val ( <*> ) : ('a -> 'b) t -> 'a t -> 'b t
+
+  module Let_syntax : sig
+    val return : 'a -> 'a t
+    val map : 'a t -> f:('a -> 'b) -> 'b t
+    val both : 'a t -> 'b t -> ('a * 'b) t
+    val map2 : 'a t -> 'b t -> f:('a -> 'b -> 'c) -> 'c t
+    val map3 : 'a t -> 'b t -> 'c t -> f:('a -> 'b -> 'c -> 'd) -> 'd t
+    val map4 : 'a t -> 'b t -> 'c t -> 'd t -> f:('a -> 'b -> 'c -> 'd -> 'e) -> 'e t
+  end
+
+  val ( let+ ) : 'a t -> ('a -> 'b) -> 'b t
+  val ( and+ ) : 'a t -> 'b t -> ('a * 'b) t
 end
 
 module type Parser = sig
@@ -198,10 +214,25 @@ module type Parser = sig
          and type token = token
          and type token_tag = token_tag
          and type 'a v = 'a v
+
+    include Library with type 'a t := 'a t
   end
 
+  (** Get the type of a grammar. *)
   val typeof : 'ctx Type_env.t -> ('ctx, 'a, 'd) Grammar.t -> Type.t
-  val parse : ('ctx, 'a, Type.t) Grammar.t -> 'ctx Parse_env.t -> 'a parser
+
+  (** Typecheck a construction. *)
+  val typecheck : 'a Construction.t -> (unit, 'a, Type.t) Grammar.t
+
+  (** Parse a grammar in some context. See [parse_exn] for the simplified version.
+
+      Raises {!Prelude.Parse_error}. *)
+  val parse'_exn : ('ctx, 'a, Type.t) Grammar.t -> 'ctx Parse_env.t -> 'a parser
+
+  (** Parse a construction. See {!parse'_exn} for more control.
+
+      Raises {!Prelude.Parse_error}. *)
+  val parse_exn : 'a Construction.t -> 'a parser
 end
 
 type string_stream = (Uutf.decoder * Uchar.t option) ref
@@ -228,13 +259,21 @@ module type String_parser = sig
   val lower : Uchar.t Construction.t
   val upper : Uchar.t Construction.t
 
+  (** Parser surrounded by braces (['{' _ '}']) *)
+  val braces : 'a Construction.t -> 'a Construction.t
+
+  (** Parser surrounded by parens (['(' _ ')']) *)
+  val parens : 'a Construction.t -> 'a Construction.t
+
+  (** Parser surrounded by brackest (['\[' _ '\]']) *)
+  val brackets : 'a Construction.t -> 'a Construction.t
+
   module Sexp : sig
     type sexp =
       | Sym of string
       | Seq of sexp list
 
     val pp : sexp Fmt.t
-    val paren : 'a Construction.t -> 'a Construction.t
     val sexp : sexp Construction.t
   end
 
