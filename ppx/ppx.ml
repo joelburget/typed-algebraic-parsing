@@ -24,7 +24,7 @@ let expand_parser ~loc ~path:_ expr =
       | Pexp_apply ([%expr alt], [ (_, p1); (_, p2) ])
       | Pexp_apply ({ pexp_desc = Pexp_apply ([%expr alt], [ (_, p1) ]); _ }, [ (_, p2) ])
         ->
-        alt (reflect p1) (reflect p2)
+        alt ~failure_msg:"TODO" (reflect p1) (reflect p2)
       | _ -> failwith "TODO")
   in
   expr |> reflect |> typecheck |> compile

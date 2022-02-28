@@ -144,7 +144,7 @@ module type Construction = sig
   val tok : token_tag list -> token t
   val bot : 'a t
   val seq : 'a t -> 'b t -> ('a * 'b) t
-  val alt : 'a t -> 'a t -> 'a t
+  val alt : ?failure_msg:string -> 'a t -> 'a t -> 'a t
   val map : ('a v -> 'b v) -> 'a t -> 'b t
   val fix : ('b t -> 'b t) -> 'b t
   val star : 'a t -> 'a list t
@@ -160,7 +160,7 @@ module type Library = sig
   val always : 'a -> 'b -> 'a
   val ( ++ ) : 'a t -> 'b t -> ('a * 'b) t
   val ( ==> ) : 'a t -> ('a -> 'b) -> 'b t
-  val choice : 'a t list -> 'a t
+  val choice : failure_msg:string -> 'a t list -> 'a t
   val option : 'a t -> 'a option t
   val plus : 'a t -> 'a list t
   val infixr : ('a -> 'a -> 'a) t -> 'a t -> 'a t
@@ -222,7 +222,7 @@ module type String_parser = sig
   end
 
   val ctok : char -> Uchar.t Construction.t
-  val charset : string -> Uchar.t Construction.t
+  val charset : failure_msg:string -> string -> Uchar.t Construction.t
   val lower : Uchar.t Construction.t
   val upper : Uchar.t Construction.t
 

@@ -50,14 +50,17 @@ end = struct
 
     let map f p s = f (p s)
 
-    let alt tp1 p1 tp2 p2 s =
+    let alt msg tp1 p1 tp2 p2 s =
       match Stream.peek s with
       | None ->
         if tp1.null
         then p1 s
         else if tp2.null
         then p2 s
-        else parse_error "Unexpected end of stream"
+        else (
+          match msg with
+          | None -> parse_error "Unexpected end of stream"
+          | Some msg -> parse_error "Unexpected end of stream (%s)" msg)
       | Some c ->
         let tag = Token.tag c in
         if Token.Set.mem tp1.first tag
@@ -68,7 +71,10 @@ end = struct
         then p1 s
         else if tp2.null
         then p2 s
-        else parse_error "No progress possible"
+        else (
+          match msg with
+          | None -> parse_error "No progress possible"
+          | Some msg -> parse_error "No progress possible (%s)" msg)
     ;;
   end
 
@@ -86,7 +92,7 @@ end = struct
       | Seq : ('ctx, 'a, 'd) t * ('ctx, 'b, 'd) t -> ('ctx, 'a * 'b, 'd) t'
       | Tok : Token.tag list -> ('ctx, Token.t, 'd) t'
       | Bot : ('ctx, 'a, 'd) t'
-      | Alt : ('ctx, 'a, 'd) t * ('ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
+      | Alt : string option * ('ctx, 'a, 'd) t * ('ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
       | Map : ('a -> 'b) * ('ctx, 'a, 'd) t -> ('ctx, 'b, 'd) t'
       | Fix : ('a * 'ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
       | Star : ('ctx, 'a, 'd) t -> ('ctx, 'a list, 'd) t'
@@ -107,12 +113,12 @@ end = struct
         Type.seq (data g1) (data g2), Seq (g1, g2)
       | Tok c -> Type.tok (Token.Set.of_list c), Tok c
       | Bot -> Type.bot, Bot
-      | Alt (g1, g2) ->
+      | Alt (msg, g1, g2) ->
         let g1 = typeof env g1 in
         let g2 = typeof env g2 in
-        Type.alt (data g1) (data g2), Alt (g1, g2)
+        Type.alt (data g1) (data g2), Alt (msg, g1, g2)
       | Map (f, g) ->
-        let g (* TODO: is this right? *) = typeof env g in
+        let g = typeof env g in
         data g, Map (f, g)
       | Fix g ->
         let ty = Type.fix (fun ty -> data (typeof (ty :: env) g)) in
@@ -140,7 +146,7 @@ end = struct
       seq p1 p2
     | Tok c -> tok (Token.Set.of_list c)
     | Bot -> bot
-    | Alt (g1, g2) -> alt (data g1) (parse g1 env) (data g2) (parse g2 env)
+    | Alt (msg, g1, g2) -> alt msg (data g1) (parse g1 env) (data g2) (parse g2 env)
     | Map (f, g) -> parse g env |> map f
     | Star g ->
       let p = parse g env in
@@ -178,7 +184,11 @@ end = struct
     let tok c = { tdb = (fun _ -> (), Tok c) }
     let bot = { tdb = (fun _ -> (), Bot) }
     let seq f g = { tdb = (fun ctx -> (), Seq (f.tdb ctx, g.tdb ctx)) }
-    let alt x y = { tdb = (fun ctx -> (), Alt (x.tdb ctx, y.tdb ctx)) }
+
+    let alt ?failure_msg x y =
+      { tdb = (fun ctx -> (), Alt (failure_msg, x.tdb ctx, y.tdb ctx)) }
+    ;;
+
     let map f a = { tdb = (fun ctx -> (), Map (f, a.tdb ctx)) }
 
     let fix : type b. (b t -> b t) -> b t =

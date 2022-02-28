@@ -24,9 +24,13 @@ module Stream = struct
 end
 
 let ctok c = tok [ Uchar.of_char c ]
-let charset s = s |> String.to_list |> List.map ~f:ctok |> choice
-let lower = charset "abcdefghijklmnopqrstuvwxyz"
-let upper = charset "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+let charset ~failure_msg s =
+  s |> String.to_list |> List.map ~f:ctok |> choice ~failure_msg
+;;
+
+let lower = charset ~failure_msg:"lower" "abcdefghijklmnopqrstuvwxyz"
+let upper = charset ~failure_msg:"upper" "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 let string_of_uchars chars = chars |> List.map ~f:Uchar.to_char_exn |> String.of_char_list
 
 module Sexp = struct
@@ -45,6 +49,7 @@ module Sexp = struct
   let sexp =
     fix (fun sexp ->
         choice
+          ~failure_msg:"word or parens"
           [ (word ==> fun sym -> Sym sym)
           ; (paren (sep_by (ctok ' ') sexp) ==> fun s -> Seq s)
           ])
@@ -52,8 +57,8 @@ module Sexp = struct
 end
 
 module Arith = struct
-  let digits = plus (charset "0123456789")
-  let whitespace = star (charset " \t\n")
+  let digits = plus (charset ~failure_msg:"digit" "0123456789")
+  let whitespace = star (charset ~failure_msg:"whitespace" " \t\n")
 
   let num : float t =
     digits ++ ctok '.' ++ option digits
@@ -71,7 +76,8 @@ module Arith = struct
           ; Left, chr' '*' ==> always Float.( * )
           ; Left, chr' '+' ==> always Float.( + )
           ]
-          (choice [ num; Sexp.paren arith ] <* whitespace))
+          (choice ~failure_msg:"num or parenthesized expression" [ num; parens arith ]
+          <* whitespace))
   ;;
 end
 
@@ -186,12 +192,12 @@ let%test_module _ =
     ;;
 
     let%expect_test "star again" =
-      go (star (charset "ab")) (Fmt.list Token.pp) "abbb";
+      go (star (charset ~failure_msg:"ab" "ab")) (Fmt.list Token.pp) "abbb";
       [%expect "abbb"]
     ;;
 
     let%expect_test "choice, option" =
-      let go' = go (choice [ ctok 'a'; ctok 'b' ]) Token.pp in
+      let go' = go (choice ~failure_msg:"'a' or 'b'" [ ctok 'a'; ctok 'b' ]) Token.pp in
       go' "a";
       go' "a";
       let go' = go (option (ctok 'a')) (Fmt.option Token.pp) in
@@ -204,7 +210,7 @@ let%test_module _ =
     ;;
 
     let%expect_test "charset, upper, lower" =
-      let go' = go (charset "ab") Token.pp in
+      let go' = go (charset ~failure_msg:"ab" "ab") Token.pp in
       go' "a";
       go' "c";
       let go' = go upper Token.pp in

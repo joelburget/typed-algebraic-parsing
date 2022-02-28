@@ -10,8 +10,8 @@ module Make (Construction : Signatures.Construction with type 'a v = 'a) = struc
   let always x _ = x
   let ( ++ ) = seq
   let ( ==> ) p f = map f p
-  let choice gs = List.fold_left ~f:alt ~init:bot gs
-  let option r = choice [ eps None; (r ==> fun x -> Some x) ]
+  let choice ~failure_msg gs = List.fold_left ~f:(alt ~failure_msg) ~init:bot gs
+  let option r = choice ~failure_msg:"option failed" [ eps None; (r ==> fun x -> Some x) ]
   let plus g = g ++ star g ==> fun (x, xs) -> x :: xs
   let sep_by1 sep p = p ++ star (sep ++ p ==> snd) ==> fun (x, xs) -> x :: xs
   let sep_by sep p = option (sep_by1 sep p) ==> function None -> [] | Some xs -> xs

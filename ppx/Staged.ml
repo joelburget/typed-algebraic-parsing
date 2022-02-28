@@ -53,7 +53,7 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
       | Seq : ('ctx, 'a, 'd) t * ('ctx, 'b, 'd) t -> ('ctx, 'a * 'b, 'd) t'
       | Tok : Token.tag list -> ('ctx, 'a, 'd) t'
       | Bot : ('ctx, 'a, 'd) t'
-      | Alt : ('ctx, 'a, 'd) t * ('ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
+      | Alt : string option * ('ctx, 'a, 'd) t * ('ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
       | Map : ('a code -> 'b code) * ('ctx, 'a, 'd) t -> ('ctx, 'b, 'd) t'
       | Fix : ('a * 'ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
       | Var : ('ctx, 'a) Var.t -> ('ctx, 'a, 'd) t'
@@ -74,10 +74,10 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
         Type.seq (data g1) (data g2), Seq (g1, g2)
       | Tok c -> Type.tok (Token.Set.of_list c), Tok c
       | Bot -> Type.bot, Bot
-      | Alt (g1, g2) ->
+      | Alt (failure_msg, g1, g2) ->
         let g1 = typeof env g1 in
         let g2 = typeof env g2 in
-        Type.alt (data g1) (data g2), Alt (g1, g2)
+        Type.alt (data g1) (data g2), Alt (failure_msg, g1, g2)
       | Map (f, g) ->
         let g (* TODO: is this right? *) = typeof env g in
         data g, Map (f, g)
@@ -111,32 +111,52 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
     type 'a t = { tdb : 'ctx. 'ctx ctx -> ('ctx, 'a, unit) grammar }
 
     let crush : type ctx a x. (ctx, a, x) Grammar.t -> (ctx, a, x) Grammar.t =
-      let rec loop (toks : Token.tag list) (summands : (ctx, a, x) Grammar.t list)
+      let rec loop
+          (toks : Token.tag list)
+          (summands : (ctx, a, x) Grammar.t list)
+          failure_msgs
         = function
-        | _, Grammar.Alt (l, r) ->
-          let toks, summands = loop toks summands l in
-          let toks, summands = loop toks summands r in
-          toks, summands
-        | _, Tok t -> t @ toks, summands
-        | e -> toks, e :: summands
+        | _, Grammar.Alt (failure_msg, l, r) ->
+          let toks, summands, failure_msgs = loop toks summands failure_msgs l in
+          let toks, summands, failure_msgs = loop toks summands failure_msgs r in
+          let failure_msgs =
+            match failure_msg with
+            | None -> failure_msgs
+            | Some msg -> msg :: failure_msgs
+          in
+          toks, summands, failure_msgs
+        | _, Tok t -> t @ toks, summands, failure_msgs
+        | e -> toks, e :: summands, failure_msgs
       in
-      let alt e es =
-        List.fold_right ~f:(fun (d, x) y -> Grammar.Alt ((d, x), (d, y))) ~init:es e
+      let alt failure_msgs e es =
+        let failure_msg =
+          match failure_msgs with
+          | [] -> None
+          | [ msg ] -> Some msg
+          | msgs -> Some Fmt.(str "messages: %a" (brackets (list ~sep:comma string)) msgs)
+        in
+        List.fold_right
+          ~f:(fun (d, x) y -> Grammar.Alt (failure_msg, (d, x), (d, y)))
+          ~init:es
+          e
       in
       fun ((d, _) as e) ->
         ( d
-        , match loop [] [] e with
-          | [], [] -> Bot
-          | toks, [] -> Tok toks
-          | [], (_, e) :: es -> alt es e
-          | toks, es -> alt es (Tok toks) )
+        , match loop [] [] [] e with
+          | [], [], _ -> Bot
+          | toks, [], _ -> Tok toks
+          | [], (_, e) :: es, failure_msgs -> alt failure_msgs es e
+          | toks, es, failure_msgs -> alt failure_msgs es (Tok toks) )
     ;;
 
     let eps a = { tdb = (fun _ -> (), Eps a) }
     let tok tag_list = { tdb = (fun _ -> (), Tok tag_list) }
     let bot = { tdb = (fun _ -> (), Bot) }
     let seq f g = { tdb = (fun i -> (), Seq (f.tdb i, g.tdb i)) }
-    let alt f g = { tdb = (fun i -> crush ((), Alt (f.tdb i, g.tdb i))) }
+
+    let alt ?failure_msg f g =
+      { tdb = (fun i -> crush ((), Alt (failure_msg, f.tdb i, g.tdb i))) }
+    ;;
     let map f a = { tdb = (fun ctx -> (), Map (f, a.tdb ctx)) }
 
     let fix f =
@@ -180,7 +200,7 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
       let bot _ = return [%expr failwith "impossible"]
       let seq p1 p2 = p1 >>= fun a -> p2 >>= fun b -> return [%expr [%e a], [%e b]]
 
-      let alt tp1 p1 tp2 p2 =
+      let alt msg tp1 p1 tp2 p2 =
         let open Type in
         peek_mem tp1.first
         @@ function
@@ -195,7 +215,10 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
           | `Yes -> p2
           | `No when tp1.null -> p1
           | `No when tp2.null -> p2
-          | `No -> fail "No progress possible!")
+          | `No ->
+            (match msg with
+            | None -> fail "No progress possible!"
+            | Some msg -> fail (Printf.sprintf "No progress possible (%s)!" msg)))
       ;;
 
       let map f p = p >>= fun x -> return (f x)
@@ -229,10 +252,10 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
         seq p1 p2
       | Tok t -> tok t
       | Bot -> bot ()
-      | Alt (g1, g2) ->
+      | Alt (msg, g1, g2) ->
         let p1 = parse g1 penv in
         let p2 = parse g2 penv in
-        alt (data g1) p1 (data g2) p2
+        alt msg (data g1) p1 (data g2) p2
       | Map (f, g') ->
         let p = parse g' penv in
         map f p
