@@ -193,13 +193,13 @@ end = struct
 
     let fix : type b. (b t -> b t) -> b t =
      fun f ->
-      { tdb =
-          (fun i ->
-            ( ()
-            , Fix
-                ((f { tdb = (fun j -> (), Var (Tshift.tshift j (() :: i))) }).tdb
-                   (() :: i)) ))
-      }
+      let tdb : type c. c ctx -> (c, b, unit) grammar =
+       fun i ->
+        let bt : b t = f { tdb = (fun j -> (), Var (Tshift.tshift j (() :: i))) } in
+        let gram : (b * c, b, unit) grammar = bt.tdb (() :: i) in
+        (), Fix gram
+      in
+      { tdb }
    ;;
 
     let star g = { tdb = (fun p -> (), Star (g.tdb p)) }
