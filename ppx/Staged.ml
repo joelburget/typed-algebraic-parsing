@@ -58,6 +58,8 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
       | Fix : ('a * 'ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
       | Var : ('ctx, 'a) Var.t -> ('ctx, 'a, 'd) t'
       | Star : ('ctx, 'a, 'd) t -> ('ctx, 'a list, 'd) t'
+      | Annot : string * ('ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
+      | Fail : string -> ('ctx, 'a, 'd) t'
 
     and ('ctx, 'a, 'd) t = 'd * ('ctx, 'a, 'd) t'
 
@@ -90,6 +92,10 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
         let g = typeof env g in
         Type.star (data g), Star g
       | Var v -> Type_env.lookup env v, Var v
+      | Annot (msg, a) ->
+        let g = typeof env a in
+        data g, Annot (msg, g)
+      | Fail msg -> Type.eps, Fail msg
    ;;
   end
 
@@ -163,7 +169,10 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
     let alt ?failure_msg f g =
       { tdb = (fun i -> crush ((), Alt (failure_msg, f.tdb i, g.tdb i))) }
     ;;
+
     let map f a = { tdb = (fun ctx -> (), Map (f, a.tdb ctx)) }
+    let ( <?> ) a msg = { tdb = (fun ctx -> (), Annot (msg, a.tdb ctx)) }
+    let fail msg = { tdb = (fun _ -> (), Fail msg) }
 
     let fix f =
       { tdb =
@@ -206,7 +215,13 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
       let bot _ = return [%expr failwith "impossible"]
       let seq p1 p2 = p1 >>= fun a -> p2 >>= fun b -> return [%expr [%e a], [%e b]]
 
-      let alt msg tp1 p1 tp2 p2 =
+      let message_with_stack msg stack =
+        match stack with
+        | [] -> msg
+        | strs -> Fmt.(str "%s (%a)" msg (list ~sep:comma string) strs)
+      ;;
+
+      let alt msg stack tp1 p1 tp2 p2 =
         let open Type in
         peek_mem tp1.first
         @@ function
@@ -223,8 +238,12 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
           | `No when tp2.null -> p2
           | `No ->
             (match msg with
-            | None -> fail "No progress possible!"
-            | Some msg -> fail (Printf.sprintf "No progress possible (%s)!" msg)))
+            | None -> fail (message_with_stack "No progress possible!" stack)
+            | Some msg ->
+              fail
+                (message_with_stack
+                   (Printf.sprintf "No progress possible (%s)!" msg)
+                   stack)))
       ;;
 
       let map f p = p >>= fun x -> return (f x)
@@ -246,34 +265,39 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
       type 'a t = 'a Ir.t
     end)
 
-    let rec parse : type ctx a. (ctx, a, Type.t) Grammar.t -> ctx Parse_env.t -> a Ir.t =
-     fun (_, g) penv ->
+    let rec parse
+        : type ctx a.
+          (ctx, a, Type.t) Grammar.t -> ctx Parse_env.t -> string list -> a Ir.t
+      =
+     fun (_, g) penv stack ->
       let open Parse in
       let data (d, _) = d in
       match g with
       | Eps v -> eps v
       | Seq (g1, g2) ->
-        let p1 = parse g1 penv in
-        let p2 = parse g2 penv in
+        let p1 = parse g1 penv stack in
+        let p2 = parse g2 penv stack in
         seq p1 p2
       | Tok t -> tok t
       | Bot -> bot ()
       | Alt (msg, g1, g2) ->
-        let p1 = parse g1 penv in
-        let p2 = parse g2 penv in
-        alt msg (data g1) p1 (data g2) p2
+        let p1 = parse g1 penv stack in
+        let p2 = parse g2 penv stack in
+        alt msg stack (data g1) p1 (data g2) p2
       | Map (f, g') ->
-        let p = parse g' penv in
+        let p = parse g' penv stack in
         map f p
       | Star g1 ->
-        let p1 = parse g1 penv in
+        let p1 = parse g1 penv stack in
         star (data g1) p1
       | Var n -> Parse_env.lookup penv n
-      | Fix g' -> Ir.fix (fun p -> parse g' (p :: penv))
+      | Fix g' -> Ir.fix (fun p -> parse g' (p :: penv) stack)
+      | Annot (_, g) -> parse g penv stack
+      | Fail msg -> parse_error "%s" (message_with_stack msg stack)
    ;;
 
     let compile (g : 'a typechecked) : 'a Caml.Stream.t code =
-      Ir.Codegen.generate (parse g Parse_env.[])
+      Ir.Codegen.generate (parse g Parse_env.[] [])
     ;;
   end
 

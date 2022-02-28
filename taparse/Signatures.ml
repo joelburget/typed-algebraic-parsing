@@ -148,6 +148,8 @@ module type Construction = sig
   val map : ('a v -> 'b v) -> 'a t -> 'b t
   val fix : ('b t -> 'b t) -> 'b t
   val star : 'a t -> 'a list t
+  val ( <?> ) : 'a t -> string -> 'a t
+  val fail : string -> 'a t
 end
 
 module type Library = sig

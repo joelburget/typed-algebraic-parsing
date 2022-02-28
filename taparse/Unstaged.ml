@@ -50,7 +50,13 @@ end = struct
 
     let map f p s = f (p s)
 
-    let alt msg tp1 p1 tp2 p2 s =
+    let message_with_stack msg stack =
+      match stack with
+      | [] -> msg
+      | strs -> Fmt.(str "%s (%a)" msg (list ~sep:comma string) strs)
+    ;;
+
+    let alt msg stack tp1 p1 tp2 p2 s =
       match Stream.peek s with
       | None ->
         if tp1.null
@@ -58,9 +64,12 @@ end = struct
         else if tp2.null
         then p2 s
         else (
-          match msg with
-          | None -> parse_error "Unexpected end of stream"
-          | Some msg -> parse_error "Unexpected end of stream (%s)" msg)
+          let msg =
+            match msg with
+            | None -> "Unexpected end of stream"
+            | Some msg -> Fmt.str "Unexpected end of stream (%s)" msg
+          in
+          parse_error "%s" (message_with_stack msg stack))
       | Some c ->
         let tag = Token.tag c in
         if Token.Set.mem tp1.first tag
@@ -72,9 +81,12 @@ end = struct
         else if tp2.null
         then p2 s
         else (
-          match msg with
-          | None -> parse_error "No progress possible"
-          | Some msg -> parse_error "No progress possible (%s)" msg)
+          let msg =
+            match msg with
+            | None -> "No progress possible"
+            | Some msg -> Fmt.str "No progress possible (%s)" msg
+          in
+          parse_error "%s" (message_with_stack msg stack))
     ;;
   end
 
@@ -94,9 +106,11 @@ end = struct
       | Bot : ('ctx, 'a, 'd) t'
       | Alt : string option * ('ctx, 'a, 'd) t * ('ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
       | Map : ('a -> 'b) * ('ctx, 'a, 'd) t -> ('ctx, 'b, 'd) t'
+      | Annot : string * ('ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
       | Fix : ('a * 'ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
       | Star : ('ctx, 'a, 'd) t -> ('ctx, 'a list, 'd) t'
       | Var : ('ctx, 'a) Var.t -> ('ctx, 'a, 'd) t'
+      | Fail : string -> ('ctx, 'a, 'd) t'
 
     and ('ctx, 'a, 'd) t = 'd * ('ctx, 'a, 'd) t'
 
@@ -129,27 +143,35 @@ end = struct
         let g = typeof env g in
         Type.star (data g), Star g
       | Var v -> Type_env.lookup env v, Var v
+      | Annot (msg, a) ->
+        let g = typeof env a in
+        data g, Annot (msg, g)
+      | Fail msg -> Type.eps, Fail msg
    ;;
   end
 
   let typeof env gram = Grammar.typeof env gram |> fst
 
-  let rec parse : type ctx a. (ctx, a, Type.t) Grammar.t -> ctx Parse_env.t -> a parser =
-   fun (_, g) env ->
+  let rec parse
+      : type ctx a.
+        (ctx, a, Type.t) Grammar.t -> ctx Parse_env.t -> string list -> a parser
+    =
+   fun (_, g) env stack ->
     let data = Grammar.data in
     let open Parse in
     match g with
     | Eps a -> eps a
     | Seq (g1, g2) ->
-      let p1 = parse g1 env in
-      let p2 = parse g2 env in
+      let p1 = parse g1 env stack in
+      let p2 = parse g2 env stack in
       seq p1 p2
     | Tok c -> tok (Token.Set.of_list c)
     | Bot -> bot
-    | Alt (msg, g1, g2) -> alt msg (data g1) (parse g1 env) (data g2) (parse g2 env)
-    | Map (f, g) -> parse g env |> map f
+    | Alt (msg, g1, g2) ->
+      alt msg stack (data g1) (parse g1 env stack) (data g2) (parse g2 env stack)
+    | Map (f, g) -> parse g env stack |> map f
     | Star g ->
-      let p = parse g env in
+      let p = parse g env stack in
       let first_set = (data g).Type.first in
       let rec go ret s =
         match Stream.peek s with
@@ -160,13 +182,15 @@ end = struct
     | Fix g ->
       let r = ref (fun _ -> assert false) in
       let p s = !r s in
-      let q = parse g (p :: env) in
+      let q = parse g (p :: env) stack in
       r := q;
       p
     | Var n -> Parse_env.lookup env n
+    | Annot (annot, g) -> parse g env (annot :: stack)
+    | Fail msg -> parse_error "%s" (message_with_stack msg stack)
  ;;
 
-  module Construction = struct
+  module Construction' = struct
     module Ctx = Env (struct
       type _ t = unit
     end)
@@ -190,6 +214,7 @@ end = struct
     ;;
 
     let map f a = { tdb = (fun ctx -> (), Map (f, a.tdb ctx)) }
+    let ( <?> ) a msg = { tdb = (fun ctx -> (), Annot (msg, a.tdb ctx)) }
 
     let fix : type b. (b t -> b t) -> b t =
      fun f ->
@@ -203,5 +228,6 @@ end = struct
    ;;
 
     let star g = { tdb = (fun p -> (), Star (g.tdb p)) }
+    let fail msg = { tdb = (fun _ -> (), Fail msg) }
   end
 end

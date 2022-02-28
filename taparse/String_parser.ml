@@ -210,7 +210,7 @@ let%test_module _ =
     ;;
 
     let%expect_test "charset, upper, lower" =
-      let go' = go (charset ~failure_msg:"ab" "ab") Token.pp in
+      let go' = go (charset ~failure_msg:"message" "ab") Token.pp in
       go' "a";
       go' "c";
       let go' = go upper Token.pp in
@@ -219,14 +219,26 @@ let%test_module _ =
       let go' = go lower Token.pp in
       go' "a";
       go' "A";
+      let go' = go (lower <?> "foo" <?> "bar") Token.pp in
+      go' "A";
       [%expect
         {|
         a
-        failed parse: No progress possible
-        failed parse: No progress possible
+        failed parse: No progress possible (message)
+        failed parse: No progress possible (upper)
         A
         a
-        failed parse: No progress possible |}]
+        failed parse: No progress possible (lower)
+        failed parse: No progress possible (lower) (foo,
+        bar) |}]
+    ;;
+
+    let%expect_test "fail" =
+      let go' = go (fail "msg" <?> "foo" <?> "bar") Token.pp in
+      go' "A";
+      [%expect {|
+        failed parse: msg (foo,
+        bar) |}]
     ;;
 
     let%expect_test "sexp" =
