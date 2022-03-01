@@ -1,6 +1,8 @@
 module type Meet_semilattice_laws = sig
   type t
 
+  include Ordered_set_sigs.Partial_order_laws with type t := t
+
   (** [a && (b && c) = (a && b) && c] *)
   val meet_associative : t -> t -> t -> bool
 
@@ -20,6 +22,8 @@ end
 
 module type Join_semilattice_laws = sig
   type t
+
+  include Ordered_set_sigs.Partial_order_laws with type t := t
 
   (** [a || (b || c) = (a || b) || c] *)
   val join_associative : t -> t -> t -> bool
@@ -99,22 +103,14 @@ end
 module type Boolean_algebra_laws = sig
   include Heyting_algebra_laws
   include Complemented_lattice_laws with type t := t
-end
 
-(** See {!Meet_semilattice} / {!Join_semilattice}. *)
-module type Semilattice_base = sig
-  type t
-
-  val pp : t Fmt.t
-
-  module Infix : sig
-    val ( = ) : t -> t -> bool
-  end
+  (** [complement (complement a) <= a] *)
+  val stable : t -> bool
 end
 
 (** A partially ordered set with a meet operation. *)
 module type Meet_semilattice = sig
-  include Semilattice_base
+  include Ordered_set_sigs.Preorder
 
   (** Meet, ie greatest lower bound, infimum, "and", or intersection. *)
   val ( && ) : t -> t -> t
@@ -134,7 +130,7 @@ end
 
 (** A partially ordered set with a join operation. *)
 module type Join_semilattice = sig
-  include Semilattice_base
+  include Ordered_set_sigs.Preorder
 
   (** Join; ie least upper bound, supremum, "or", or union. *)
   val ( || ) : t -> t -> t

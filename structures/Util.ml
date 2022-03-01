@@ -12,8 +12,8 @@ end) =
 struct
   open T
 
-  let mk1 a lhs rhs =
-    let result = Infix.(lhs = rhs) in
+  let op1 op a lhs rhs =
+    let result = op lhs rhs in
     if not result
     then (
       pr "a = %a@." pp a;
@@ -21,8 +21,8 @@ struct
     result
   ;;
 
-  let mk2 a b lhs rhs =
-    let result = Infix.(lhs = rhs) in
+  let op2 op a b lhs rhs =
+    let result = op lhs rhs in
     if not result
     then (
       pr "a = %a@." pp a;
@@ -31,8 +31,8 @@ struct
     result
   ;;
 
-  let mk3 a b c lhs rhs =
-    let result = Infix.(lhs = rhs) in
+  let op3 op a b c lhs rhs =
+    let result = op lhs rhs in
     if not result
     then (
       pr "a = %a@." pp a;
@@ -41,4 +41,8 @@ struct
       pr "%a <> %a@." pp lhs pp rhs);
     result
   ;;
+
+  let equal1 = op1 Infix.( = )
+  let equal2 = op2 Infix.( = )
+  let equal3 = op3 Infix.( = )
 end
