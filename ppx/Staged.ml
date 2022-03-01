@@ -22,20 +22,7 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
 
   module Type : Staged_signatures.Type with module Token = Token = struct
     include Type.Make (Token)
-
-    module Token = struct
-      include Token
-
-      let quote ~loc:_ _ = failwith "TODO quote"
-      let unquote ~loc:_ = failwith "TODO unquote"
-      let reflect _ = failwith "TODO reflect"
-
-      module Interval = struct
-        include Interval
-
-        let to_pattern ~loc:_ _ = failwith "TODO to_pattern"
-      end
-    end
+    module Token = Token_stream.Token
   end
 
   module Type_env = Env (struct

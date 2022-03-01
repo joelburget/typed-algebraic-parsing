@@ -6,6 +6,8 @@ module Char_token = struct
   type tag = char
   type interval = Char_class.interval
 
+  module Tag = Base.Char
+
   module Set = struct
     include Char_class
     include Char_class.Char
@@ -41,7 +43,6 @@ module Char_token = struct
 
   let tag tok = tok
   let pp ppf c = Fmt.pf ppf "%C" c
-  let pp_tag = pp
 
   open Ppxlib
 

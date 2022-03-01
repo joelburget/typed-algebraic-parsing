@@ -189,7 +189,7 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
         |> List.fold
              ~f:(fun v ival ->
                let x, y = Token.Interval.to_tuple ival in
-               v + if Token.compare x y = 0 then 1 else 2)
+               v + if Token.Tag.compare x y = 0 then 1 else 2)
              ~init:0
       ;;
 
