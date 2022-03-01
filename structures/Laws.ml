@@ -35,7 +35,7 @@ struct
   open Infix
   open Util.Make (T)
 
-  type nonrec t = t
+  type t = T.t
 
   module Ring = struct
     let plus_associative a b c = equal3 a b c (a + b + c) (a + (b + c))
