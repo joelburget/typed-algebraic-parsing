@@ -7,6 +7,7 @@ module Parser :
   Signatures.Parser
     with type token = Uchar.t
      and type token_tag = Uchar.t
+     and type token_set = Char_class.t
      and type stream = string_stream
      and type 'a v = 'a
      and type 'a parser = string_stream -> 'a =
@@ -23,14 +24,10 @@ module Stream = struct
   let of_string str = Token_streams.Uchar.of_decoder (Uutf.decoder (`String str))
 end
 
-let ctok c = tok [ Uchar.of_char c ]
-
-let charset ~failure_msg s =
-  s |> String.to_list |> List.map ~f:ctok |> choice ~failure_msg
-;;
-
-let lower = charset ~failure_msg:"lower" "abcdefghijklmnopqrstuvwxyz"
-let upper = charset ~failure_msg:"upper" "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+let ctok c = tok (Char_class.Char.singleton c)
+let charset str = tok (Char_class.of_string str)
+let lower = charset "abcdefghijklmnopqrstuvwxyz"
+let upper = charset "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 let string_of_uchars chars = chars |> List.map ~f:Uchar.to_char_exn |> String.of_char_list
 let make_paren_parser c1 c2 p = ctok c1 ++ p ++ ctok c2 ==> fun ((_, x), _) -> x
 let braces p = make_paren_parser '{' '}' p
@@ -60,8 +57,8 @@ module Sexp = struct
 end
 
 module Arith = struct
-  let digits = plus (charset ~failure_msg:"digit" "0123456789")
-  let whitespace = star (charset ~failure_msg:"whitespace" " \t\n")
+  let digits = plus (charset "0123456789")
+  let whitespace = star (charset " \t\n")
 
   let num : float t =
     digits ++ ctok '.' ++ option digits
@@ -138,7 +135,7 @@ let%test_module _ =
     ;;
 
     let%expect_test "unicode tok" =
-      go (tok [ Stdlib.Uchar.of_int 0x1F3C1 ]) Token.pp "🏁";
+      go (tok (Char_class.singleton (Stdlib.Uchar.of_int 0x1F3C1))) Token.pp "🏁";
       [%expect {| \u1F3C1 |}]
     ;;
 
@@ -189,7 +186,7 @@ let%test_module _ =
     ;;
 
     let%expect_test "star again" =
-      go (star (charset ~failure_msg:"ab" "ab")) (Fmt.list Token.pp) "abbb";
+      go (star (charset "ab")) (Fmt.list Token.pp) "abbb";
       [%expect "abbb"]
     ;;
 
@@ -207,7 +204,7 @@ let%test_module _ =
     ;;
 
     let%expect_test "charset, upper, lower" =
-      let go' = go (charset ~failure_msg:"message" "ab") Token.pp in
+      let go' = go (charset "ab") Token.pp in
       go' "a";
       go' "c";
       let go' = go upper Token.pp in
@@ -221,13 +218,12 @@ let%test_module _ =
       [%expect
         {|
         a
-        failed parse: No progress possible (message)
-        failed parse: No progress possible (upper)
+        failed parse: Unexpected token 'c' (expected '[ab]')
+        failed parse: Unexpected token 'a' (expected '[A-Z]')
         A
         a
-        failed parse: No progress possible (lower)
-        failed parse: No progress possible (lower) (foo,
-        bar) |}]
+        failed parse: Unexpected token 'A' (expected '[a-z]')
+        failed parse: Unexpected token 'A' (expected '[a-z]') |}]
     ;;
 
     let%expect_test "fail" =

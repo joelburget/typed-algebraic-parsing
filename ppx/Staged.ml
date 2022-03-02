@@ -9,6 +9,7 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
   Staged_signatures.Parser
     with type token = Token_stream.token
      and type token_tag = Token_stream.token_tag
+     and type token_set = Token_stream.token_set
      and type stream = Token_stream.stream
      and type 'a parser = (Token_stream.stream -> 'a) code
      and type 'a v = 'a code = struct
@@ -17,6 +18,7 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
 
   type token = Token.t
   type token_tag = Token.tag
+  type token_set = Token.set
   type stream = Token_stream.stream
   type 'a parser = (Token_stream.stream -> 'a) code
 
@@ -38,7 +40,7 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
     type ('ctx, 'a, 'd) t' =
       | Eps : 'a code -> ('ctx, 'a, 'd) t'
       | Seq : ('ctx, 'a, 'd) t * ('ctx, 'b, 'd) t -> ('ctx, 'a * 'b, 'd) t'
-      | Tok : Token.tag list -> ('ctx, 'a, 'd) t'
+      | Tok : Token.set -> ('ctx, 'a, 'd) t'
       | Bot : ('ctx, 'a, 'd) t'
       | Alt : string option * ('ctx, 'a, 'd) t * ('ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
       | Map : ('a code -> 'b code) * ('ctx, 'a, 'd) t -> ('ctx, 'b, 'd) t'
@@ -61,7 +63,7 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
         let g1 = typeof env g1 in
         let g2 = typeof env' g2 in
         Type.seq (data g1) (data g2), Seq (g1, g2)
-      | Tok c -> Type.tok (Token.Set.of_list c), Tok c
+      | Tok c -> Type.tok c, Tok c
       | Bot -> Type.bot, Bot
       | Alt (failure_msg, g1, g2) ->
         let g1 = typeof env g1 in
@@ -101,6 +103,7 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
     type ('ctx, 'a, 'd) grammar = ('ctx, 'a, 'd) Grammar.t
     type token = Token.t
     type token_tag = Token.tag
+    type token_set = Token.set
     type 'a t = { tdb : 'ctx. 'ctx ctx -> ('ctx, 'a, unit) grammar }
 
     (* Normalize [Alt]s. Traverse tree of [Alt]s:
@@ -110,10 +113,7 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
      Linearize tree to a list, terminated by a single [Tok] (if there is one).
      *)
     let crush : type ctx a x. (ctx, a, x) Grammar.t -> (ctx, a, x) Grammar.t =
-      let rec loop
-          (toks : Token.tag list)
-          (summands : (ctx, a, x) Grammar.t list)
-          failure_msgs
+      let rec loop (toks : Token.set) (summands : (ctx, a, x) Grammar.t list) failure_msgs
         = function
         | _, Grammar.Alt (failure_msg, l, r) ->
           let toks, summands, failure_msgs = loop toks summands failure_msgs l in
@@ -124,7 +124,7 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
             | Some msg -> msg :: failure_msgs
           in
           toks, summands, failure_msgs
-        | _, Tok t -> t @ toks, summands, failure_msgs
+        | _, Tok t -> Token.Set.union t toks, summands, failure_msgs
         | e -> toks, e :: summands, failure_msgs
       in
       let alt failure_msgs es e =
@@ -140,16 +140,19 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
           es
       in
       fun ((d, _) as e) ->
-        ( d
-        , match loop [] [] [] e with
-          | [], [], _ -> Bot
-          | toks, [], _ -> Tok toks
-          | [], (_, e) :: es, failure_msgs -> alt failure_msgs es e
-          | toks, es, failure_msgs -> alt failure_msgs es (Tok toks) )
+        let toks, es, failure_msgs = loop Token.Set.empty [] [] e in
+        let result =
+          match Token.Set.is_empty toks, es with
+          | true, [] -> Grammar.Bot
+          | _, [] -> Tok toks
+          | true, (_, e) :: es -> alt failure_msgs es e
+          | _, es -> alt failure_msgs es (Tok toks)
+        in
+        d, result
     ;;
 
     let eps a = { tdb = (fun _ -> (), Eps a) }
-    let tok tag_list = { tdb = (fun _ -> (), Tok tag_list) }
+    let tok set = { tdb = (fun _ -> (), Tok set) }
     let bot = { tdb = (fun _ -> (), Bot) }
     let seq f g = { tdb = (fun i -> (), Seq (f.tdb i, g.tdb i)) }
 
@@ -191,8 +194,8 @@ module Make (Ast : Ast_builder.S) (Token_stream : Staged_signatures.Token_stream
 
       let eps = return
 
-      let tok c =
-        peek c
+      let tok set =
+        peek set
         @@ function
         | `Eof -> fail "Expected chr"
         | `Yes c -> junk >>= fun _ -> return c

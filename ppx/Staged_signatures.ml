@@ -89,7 +89,7 @@ module type Ir = sig
   val fail : string -> 'a t
   val junk : unit t
   val peek_mem : token_set -> ([ `Yes | `No | `Eof ] -> 'b t) -> 'b t
-  val peek : token_tag list -> ([ `Yes of Uchar.t code | `No | `Eof ] -> 'b t) -> 'b t
+  val peek : token_set -> ([ `Yes of Uchar.t code | `No | `Eof ] -> 'b t) -> 'b t
   val fix : ('b t -> 'b t) -> 'b t
 
   module Codegen : sig
@@ -121,11 +121,14 @@ end
 module type Parser = sig
   type token
   type token_tag
+  type token_set
   type stream
   type 'a parser
   type 'a v
 
-  module Token : Token with type t = token and type tag = token_tag
+  module Token :
+    Token with type t = token and type tag = token_tag and type set = token_set
+
   module Stream : Stream with type element = Token.t and type t = stream
   module Type : Type with module Token = Token
   module Type_env : Signatures.Env
@@ -145,6 +148,7 @@ module type Parser = sig
          and type ('ctx, 'a, 'd) grammar = ('ctx, 'a, 'd) Grammar.t
          and type token = token
          and type token_tag = token_tag
+         and type token_set = token_set
          and type 'a v = 'a v
   end
 

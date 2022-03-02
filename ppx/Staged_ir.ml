@@ -36,7 +36,7 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
     (* match read with Eof → kEof
          | c when hastag(c,t) → kYes[extract t c]
          | _ → kNo *)
-    | Peek : Token.tag list * ([ `Eof | `Yes of expression | `No ] -> 'b comp) -> 'b comp
+    | Peek : Token.Set.t * ([ `Eof | `Yes of expression | `No ] -> 'b comp) -> 'b comp
     (* fail s *)
     | Fail : string -> _ comp
     (* return x *)
@@ -261,8 +261,7 @@ module Make (Token_stream : Staged_signatures.Token_stream) (Ast : Ast_builder.S
                    s
                    ~then_:(fun values -> cdcomp { ctx with values } (k' `Yes))
                    ~else_:(fun values -> cdcomp { ctx with values } (k' `No))))
-      | Peek (tags, k) ->
-        let tagset = Token.Set.of_list tags in
+      | Peek (tagset, k) ->
         (match ctx.next with
         | `EOF -> cdcomp ctx (k `Eof)
         | `Tok x ->

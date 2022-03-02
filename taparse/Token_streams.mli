@@ -13,6 +13,7 @@ module Uchar : sig
       with type token = Uchar.t
        and type token_tag = Uchar.t
        and type stream = (Uutf.decoder * Uchar.t option) ref
+       and type token_set = Char_class.t
 
   val of_decoder : Uutf.decoder -> stream
 end
@@ -22,3 +23,4 @@ module Char :
     with type token = char
      and type token_tag = char
      and type stream = char Stdlib.Stream.t
+     and type token_set = Char_class.t

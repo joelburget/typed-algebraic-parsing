@@ -5,6 +5,7 @@ module Make (Token_stream : Signatures.Token_stream) :
   Signatures.Parser
     with type token = Token_stream.token
      and type token_tag = Token_stream.token_tag
+     and type token_set = Token_stream.token_set
      and type stream = Token_stream.Stream.t
      and type 'a parser = Token_stream.Stream.t -> 'a
      and type 'a v = 'a = struct
@@ -13,6 +14,7 @@ module Make (Token_stream : Signatures.Token_stream) :
 
   type token = Token_stream.token
   type token_tag = Token_stream.token_tag
+  type token_set = Token_stream.token_set
   type stream = Token_stream.stream
   type 'a parser = Stream.t -> 'a
   type 'a v = 'a
@@ -98,7 +100,7 @@ module Make (Token_stream : Signatures.Token_stream) :
     type ('ctx, 'a, 'd) t' =
       | Eps : 'a -> ('ctx, 'a, 'd) t'
       | Seq : ('ctx, 'a, 'd) t * ('ctx, 'b, 'd) t -> ('ctx, 'a * 'b, 'd) t'
-      | Tok : Token.tag list -> ('ctx, Token.t, 'd) t'
+      | Tok : Token.Set.t -> ('ctx, Token.t, 'd) t'
       | Bot : ('ctx, 'a, 'd) t'
       | Alt : string option * ('ctx, 'a, 'd) t * ('ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
       | Map : ('a -> 'b) * ('ctx, 'a, 'd) t -> ('ctx, 'b, 'd) t'
@@ -121,7 +123,7 @@ module Make (Token_stream : Signatures.Token_stream) :
         let g1 = typeof env g1 in
         let g2 = typeof env' g2 in
         Type.seq (data g1) (data g2), Seq (g1, g2)
-      | Tok c -> Type.tok (Token.Set.of_list c), Tok c
+      | Tok set -> Type.tok set, Tok set
       | Bot -> Type.bot, Bot
       | Alt (msg, g1, g2) ->
         let g1 = typeof env g1 in
@@ -161,7 +163,7 @@ module Make (Token_stream : Signatures.Token_stream) :
       let p1 = parse g1 env stack in
       let p2 = parse g2 env stack in
       seq p1 p2
-    | Tok c -> tok (Token.Set.of_list c)
+    | Tok set -> tok set
     | Bot -> bot
     | Alt (msg, g1, g2) ->
       alt msg stack (data g1) (parse g1 env stack) (data g2) (parse g2 env stack)
@@ -198,6 +200,7 @@ module Make (Token_stream : Signatures.Token_stream) :
     type ('ctx, 'a, 'd) grammar = ('ctx, 'a, 'd) Grammar.t
     type nonrec token = token
     type nonrec token_tag = token_tag
+    type nonrec token_set = token_set
     type 'a t = { tdb : 'ctx. 'ctx Ctx.t -> ('ctx, 'a, unit) Grammar.t }
 
     let eps a = { tdb = (fun _ -> (), Eps a) }

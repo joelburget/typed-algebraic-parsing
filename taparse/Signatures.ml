@@ -131,6 +131,7 @@ module type Construction = sig
   type ('ctx, 'a, 'd) grammar
   type token
   type token_tag
+  type token_set
 
   (** Values produced by parsers *)
   type 'a v
@@ -139,7 +140,7 @@ module type Construction = sig
   type 'a t = { tdb : 'ctx. 'ctx ctx -> ('ctx, 'a, unit) grammar }
 
   val eps : 'a v -> 'a t
-  val tok : token_tag list -> token t
+  val tok : token_set -> token t
   val bot : 'a t
   val seq : 'a t -> 'b t -> ('a * 'b) t
   val alt : ?failure_msg:string -> 'a t -> 'a t -> 'a t
@@ -191,6 +192,7 @@ end
 module type Parser = sig
   type token
   type token_tag
+  type token_set
   type stream
   type 'a parser
   type 'a v
@@ -211,6 +213,7 @@ module type Parser = sig
          and type ('ctx, 'a, 'd) grammar = ('ctx, 'a, 'd) Grammar.t
          and type token = token
          and type token_tag = token_tag
+         and type token_set = token_set
          and type 'a v = 'a v
 
     include Library with type 'a t := 'a t
@@ -240,6 +243,7 @@ module type String_parser = sig
     Parser
       with type token = Uchar.t
        and type token_tag = Uchar.t
+       and type token_set = Char_class.t
        and type stream = string_stream
        and type 'a v = 'a
        and type 'a parser = string_stream -> 'a
@@ -253,7 +257,7 @@ module type String_parser = sig
   end
 
   val ctok : char -> Uchar.t Construction.t
-  val charset : failure_msg:string -> string -> Uchar.t Construction.t
+  val charset : string -> Uchar.t Construction.t
   val lower : Uchar.t Construction.t
   val upper : Uchar.t Construction.t
 

@@ -20,7 +20,7 @@ let expand_parser ~loc ~path:_ expr =
       | Pexp_apply ([%expr tok], [ (_, t) ]) ->
         (match Token.reflect t with
         | None -> failwith "failed to reflect token"
-        | Some t -> tok [ t ])
+        | Some t -> tok (Token.Set.of_list [ t ]))
       | Pexp_apply ([%expr alt], [ (_, p1); (_, p2) ])
       | Pexp_apply ({ pexp_desc = Pexp_apply ([%expr alt], [ (_, p1) ]); _ }, [ (_, p2) ])
         ->
