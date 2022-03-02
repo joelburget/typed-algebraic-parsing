@@ -12,9 +12,7 @@ module type Token_set = sig
   type tag
 
   val pp : t Fmt.t
-  val any : t
   val empty : t
-  val singleton : tag -> t
   val is_empty : t -> bool
   val ( = ) : t -> t -> bool
   val inter : t -> t -> t

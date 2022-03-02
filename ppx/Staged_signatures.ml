@@ -37,6 +37,15 @@ module type Interval = sig
   val to_pattern : loc:location -> t list -> pattern * expression option
 end
 
+module type Token_set = sig
+  include Signatures.Token_set
+
+  type interval
+
+  val intervals : t -> interval list
+  val any : t
+end
+
 module type Token = sig
   include Signatures.Token
 
@@ -46,11 +55,8 @@ module type Token = sig
   val quote : loc:location -> tag -> expression
   val reflect : expression -> t option
 
-  module Set : sig
-    include Signatures.Token_set with type t = set and type tag := tag
-
-    val intervals : t -> interval list
-  end
+  module Set :
+    Token_set with type t = set and type tag := tag and type interval = interval
 
   module Interval : Interval with type t = interval and type tag := tag
 end
