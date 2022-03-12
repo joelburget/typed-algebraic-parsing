@@ -80,7 +80,7 @@ let merge_csets in_res merge_op =
   match charsets with
   | [] | [ _ ] -> in_res
   | cset :: csets ->
-    let merged_cset = List.fold_left ~f:merge_op ~init:cset csets in
+    let merged_cset = List.fold ~f:merge_op ~init:cset csets in
     List.merge ~compare [ Char_class merged_cset ] res
 ;;
 
