@@ -166,6 +166,8 @@ let string_delta str =
   loop 0
 ;;
 
+let matches str re = nullable (string_delta str re)
+
 (* Approximate derivative class for a regex. *)
 let rec class' =
   let open Derivative_class in
@@ -343,9 +345,22 @@ let%test_module _ =
 
     let%expect_test "string_delta" =
       let go title re str = string_delta str re |> pp' title in
-      go {|delta "ab" (str "abc")|} (str "abc") "ab";
-      [%expect {|
-          "delta \"ab\" (str \"abc\")": c |}]
+      go {|string_delta "ab" (str "abc")|} (str "abc") "ab";
+      go {|string_delta "ba" (str "abc")|} (str "abc") "ba";
+      [%expect
+        {|
+          "string_delta \"ab\" (str \"abc\")": c
+          "string_delta \"ba\" (str \"abc\")": [] |}]
+    ;;
+
+    let%expect_test "matches" =
+      let go title re str = Fmt.pr "%S: %b@." title (matches str re) in
+      go {|matches "abc" (str "abc")|} (str "abc") "abc";
+      go {|matches "bac" (str "abc")|} (str "abc") "bac";
+      [%expect
+        {|
+          "matches \"abc\" (str \"abc\")": true
+          "matches \"bac\" (str \"abc\")": false |}]
     ;;
   end)
 ;;
