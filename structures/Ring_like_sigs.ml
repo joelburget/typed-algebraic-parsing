@@ -36,5 +36,9 @@ module type Rng = sig
   val additive_ident : t
 end
 
-(** (with a multiplicative identity) *)
-module type Ring = sig end
+(** A ring (with a multiplicative identity, see {!Rng} for the version without). *)
+module type Ring = sig
+  type t
+
+  include Semiring with type t := t
+end
