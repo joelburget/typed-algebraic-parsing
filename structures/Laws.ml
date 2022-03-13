@@ -1,13 +1,11 @@
 module type S = sig
   type t
 
-  module Ring : Ring_like.Laws with type t := t
+  module Ring : Ring_like_sigs.Ring_laws with type t := t
   module Lattice : Lattice_like_sigs.Distributive_lattice_laws with type t := t
 
-  (* TODO: this is the same as stability *)
-
   (** [-(-a) = a] *)
-  val double_negation : t -> bool
+  val stability : t -> bool
 end
 
 module Make (T : sig
@@ -32,24 +30,16 @@ module Make (T : sig
 end) =
 struct
   open T
-  open Infix
   open Util.Make (T)
 
   type t = T.t
 
-  module Ring = struct
-    let plus_associative a b c = equal3 a b c (a + b + c) (a + (b + c))
-    let plus_commutative a b = equal2 a b (a + b) (b + a)
-    let plus_ident a = equal1 a (a + additive_ident) a
-    let mul_inverse a = equal1 a (a * negate a) additive_ident
-    let mul_associative a b c = equal3 a b c (a * b * c) (a * (b * c))
-    let mul_commutative a b = equal2 a b (a * b) (b * a)
-    let mul_ident a = equal1 a (a * multiplicative_ident) a
-    let left_distributive a b c = equal3 a b c (a * (b + c)) ((a * b) + (a * c))
-    let right_distributive a b c = equal3 a b c ((b + c) * a) ((b * a) + (c * a))
-  end
+  module Ring = Ring_like.Ring_laws (struct
+    include T
+    include Infix
+  end)
 
   module Lattice = Lattice_like.Distributive_lattice_laws (T)
 
-  let double_negation a = equal1 a (negate (negate a)) a
+  let stability a = equal1 a (negate (negate a)) a
 end

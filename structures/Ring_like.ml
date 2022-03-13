@@ -1,48 +1,78 @@
-module type S = sig
-  type t
+open Ring_like_sigs
 
-  (** An additive identity: analogous to [0]. *)
-  val additive_ident : t
+module Semiring_laws (T : Semiring) : Semiring_laws with type t = T.t = struct
+  open Util.Make (T)
+  include T
 
-  (** A multiplicative identity: analogous to [1]. *)
-  val multiplicative_ident : t
+  let left_distributive a b c = equal3 a b c (a * (b + c)) ((a * b) + (a * c))
+  let right_distributive a b c = equal3 a b c ((b + c) * a) ((b * a) + (c * a))
 
-  val ( = ) : t -> t -> bool
+  module Addition = struct
+    type t = T.t
 
-  (** A binary operation analogous to addition. *)
-  val ( + ) : t -> t -> t
+    let left_ident a = equal1 a (additive_ident + a) a
+    let right_ident a = equal1 a (a + additive_ident) a
+    let associative a b c = equal3 a b c (a + b + c) (a + (b + c))
+    let commutative a b = equal2 a b (a + b) (b + a)
+  end
 
-  (** A binary operation analogous to multiplication. *)
-  val ( * ) : t -> t -> t
+  module Multiplication = struct
+    type t = T.t
+
+    let associative a b c = equal3 a b c (a + b + c) (a + (b + c))
+    let left_ident a = equal1 a (additive_ident + a) a
+    let right_ident a = equal1 a (a + additive_ident) a
+  end
 end
 
-module type Laws = sig
-  type t
+module Rng_laws (T : Rng) : Rng_laws with type t = T.t = struct
+  open Util.Make (T)
+  include T
 
-  (** [(a + b) + c = a + (b + c)] *)
-  val plus_associative : t -> t -> t -> bool
+  let left_distributive a b c = equal3 a b c (a * (b + c)) ((a * b) + (a * c))
+  let right_distributive a b c = equal3 a b c ((b + c) * a) ((b * a) + (c * a))
 
-  (** [a + b = b + a] *)
-  val plus_commutative : t -> t -> bool
+  module Addition = struct
+    type t = T.t
 
-  (** [a + 0 = a] *)
-  val plus_ident : t -> bool
+    let left_ident a = equal1 a (additive_ident + a) a
+    let right_ident a = equal1 a (a + additive_ident) a
+    let associative a b c = equal3 a b c (a + b + c) (a + (b + c))
+    let commutative a b = equal2 a b (a + b) (b + a)
+    let left_inverse a = equal1 a (negate a * a) additive_ident
+    let right_inverse a = equal1 a (a * negate a) additive_ident
+  end
 
-  (** [a * (-a) = 0] *)
-  val mul_inverse : t -> bool
+  module Multiplication = struct
+    type t = T.t
 
-  (** [(a * b) * c = a * (b * c)] *)
-  val mul_associative : t -> t -> t -> bool
+    let associative a b c = equal3 a b c (a + b + c) (a + (b + c))
+  end
+end
 
-  (** [a * b = b * a] *)
-  val mul_commutative : t -> t -> bool
+module Ring_laws (T : Ring) : Ring_laws with type t = T.t = struct
+  open Util.Make (T)
+  include T
 
-  (** [a * 1 = a] *)
-  val mul_ident : t -> bool
+  let left_distributive a b c = equal3 a b c (a * (b + c)) ((a * b) + (a * c))
+  let right_distributive a b c = equal3 a b c ((b + c) * a) ((b * a) + (c * a))
 
-  (** [a * (b + c) = (a * b) + (a * c)] *)
-  val left_distributive : t -> t -> t -> bool
+  module Addition = struct
+    type t = T.t
 
-  (** [(b + c) * a = (b * a) + (c * a)] *)
-  val right_distributive : t -> t -> t -> bool
+    let left_ident a = equal1 a (additive_ident + a) a
+    let right_ident a = equal1 a (a + additive_ident) a
+    let associative a b c = equal3 a b c (a + b + c) (a + (b + c))
+    let commutative a b = equal2 a b (a + b) (b + a)
+    let left_inverse a = equal1 a (negate a * a) additive_ident
+    let right_inverse a = equal1 a (a * negate a) additive_ident
+  end
+
+  module Multiplication = struct
+    type t = T.t
+
+    let associative a b c = equal3 a b c (a + b + c) (a + (b + c))
+    let left_ident a = equal1 a (additive_ident + a) a
+    let right_ident a = equal1 a (a + additive_ident) a
+  end
 end
