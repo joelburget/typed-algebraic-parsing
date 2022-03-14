@@ -7,25 +7,32 @@ type 'a action =
 
 type 'a t = (Regex.t * 'a action) list
 
+type match_location =
+  { start : int
+  ; finish : int
+  }
+
+type 'a match_ = match_location * 'a action
+
 let lex rules str =
   let len = String.length str in
-  let rec loop actions i =
+  let rec loop actions start =
     let matches =
       List.filter_map rules ~f:(fun (re, action) ->
-          Regex.match_prefix' str i re |> Option.map ~f:(fun i -> i, action))
+          Regex.match_prefix' str start re |> Option.map ~f:(fun finish -> finish, action))
     in
     match matches with
-    | [] -> Result.Error i
+    | [] -> Result.Error start
     | _ ->
-      let i, action =
+      let finish, action =
         List.fold
           matches
           ~init:(-1, Skip)
           ~f:(fun ((prev_len, _) as accum) ((len, _) as candidate) ->
             if Int.(len > prev_len) then candidate else accum)
       in
-      let actions = action :: actions in
-      if Int.(i >= len) then Ok actions else loop actions i
+      let actions = ({ start; finish }, action) :: actions in
+      if Int.(finish >= len) then Ok actions else loop actions finish
   in
   loop [] 0 |> Result.map ~f:List.rev
 ;;
@@ -40,9 +47,19 @@ let%test_module "lex" =
         | Error msg -> pf ppf "Error %S" msg
         | Return x -> pf ppf "Return %d" x
       in
+      let pp_match_location =
+        Fmt.(
+          braces
+            (record
+               ~sep:semi
+               [ field "start" (fun loc -> loc.start) int
+               ; field "finish" (fun loc -> loc.finish) int
+               ]))
+      in
+      let pp_token = Fmt.(parens (pair ~sep:semi pp_match_location pp_action)) in
       let pp ppf result =
         match result with
-        | Ok actions -> Fmt.(brackets (list pp_action ~sep:semi)) ppf actions
+        | Ok actions -> Fmt.(brackets (list pp_token ~sep:semi)) ppf actions
         | Error pos -> Fmt.pf ppf "Error %d" pos
       in
       let go rules str = Fmt.pr "%a@." pp (lex rules str) in
@@ -55,10 +72,18 @@ let%test_module "lex" =
       [%expect
         {|
         Error 0
-        [Return 1]
-        [Return 2]
-        [Return 3]
-        [Return 3; Return 2; Return 1] |}]
+        [({start: 0;
+           finish: 1}; Return 1)]
+        [({start: 0;
+           finish: 2}; Return 2)]
+        [({start: 0;
+           finish: 3}; Return 3)]
+        [({start: 0;
+           finish: 3}; Return 3);
+         ({start: 3;
+           finish: 5}; Return 2);
+         ({start: 5;
+           finish: 6}; Return 1)] |}]
     ;;
   end)
 ;;

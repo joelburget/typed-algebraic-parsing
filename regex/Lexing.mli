@@ -10,4 +10,13 @@ type 'a action =
     rules that ocamllex uses. *)
 type 'a t = (Regex.t * 'a action) list
 
-val lex : 'a t -> string -> ('a action list, int) Result.t
+(** Location of a matched token. [start] is the location of the first character matched,
+    [finish] is one past the end. *)
+type match_location =
+  { start : int
+  ; finish : int
+  }
+
+type 'a match_ = match_location * 'a action
+
+val lex : 'a t -> string -> ('a match_ list, int) Result.t
