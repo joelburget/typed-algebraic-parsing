@@ -14,7 +14,7 @@ type match_location =
 
 type 'a match_ = match_location * 'a action
 
-let lex rules str =
+let lex' rules str start0 =
   let len = String.length str in
   let rec loop actions start =
     let matches =
@@ -34,8 +34,10 @@ let lex rules str =
       let actions = ({ start; finish }, action) :: actions in
       if Int.(finish >= len) then Ok actions else loop actions finish
   in
-  loop [] 0 |> Result.map ~f:List.rev
+  loop [] start0 |> Result.map ~f:List.rev
 ;;
+
+let lex rules str = lex' rules str 0
 
 let%test_module "lex" =
   (module struct

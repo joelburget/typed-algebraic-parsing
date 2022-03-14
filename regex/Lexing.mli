@@ -19,4 +19,8 @@ type match_location =
 
 type 'a match_ = match_location * 'a action
 
+(** Lex an entire string. *)
 val lex : 'a t -> string -> ('a match_ list, int) Result.t
+
+(** Lex starting from the given point in the string. *)
+val lex' : 'a t -> string -> int -> ('a match_ list, int) Result.t
