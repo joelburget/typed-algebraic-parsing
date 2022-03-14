@@ -71,5 +71,13 @@ val is_full_match : string -> t -> bool
 (** Does the regex match a prefix of this string? *)
 val matches_prefix : string -> t -> bool
 
+(** Try to match a prefix of the string, returning the position of the first non-matching
+    character. *)
+val match_prefix : string -> t -> int option
+
+(** Try to match a prefix of the string, starting at the given position, returning the
+    position of the first non-matching character. *)
+val match_prefix' : string -> int -> t -> int option
+
 (** Compute an approximate derivative class. *)
 val class' : t -> Derivative_class.t

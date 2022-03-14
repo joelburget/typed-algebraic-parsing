@@ -168,6 +168,22 @@ let string_delta str =
 
 let is_full_match str re = nullable (string_delta str re)
 
+let match_prefix' str =
+  let len = String.length str in
+  let ( && ) = Stdlib.(( && )) in
+  let rec loop previous_matched i re =
+    let matched = nullable re in
+    if Int.(i >= len)
+    then if previous_matched then Some (i - 1) else if matched then Some i else None
+    else if previous_matched && not matched
+    then Some (i - 1)
+    else loop matched (i + 1) (delta (Uchar.of_char (String.unsafe_get str i)) re)
+  in
+  loop false
+;;
+
+let match_prefix str = match_prefix' str 0
+
 let matches_prefix str =
   let len = String.length str in
   let rec loop i re =
@@ -375,6 +391,39 @@ let%test_module _ =
           "is_full_match \"abc\" (str \"abc\")": true
           "is_full_match \"bac\" (str \"abc\")": false
           "is_full_match \"abc\" (str \"ab\")": false |}]
+    ;;
+
+    let%expect_test "match_prefix" =
+      let go title re str' =
+        Fmt.(pr "%S: %a@." title (option ~none:(any "None") int) (match_prefix str' re))
+      in
+      go {|match_prefix "abc" (str "abc")|} (str "abc") "abc";
+      go {|match_prefix "bac" (str "abc")|} (str "abc") "bac";
+      go {|match_prefix "abc" (str "abcd")|} (str "abcd") "abc";
+      go {|match_prefix "abc" (str "ab")|} (str "ab") "abc";
+      go {|match_prefix "abc" (str "")|} (str "") "abc";
+      go {|match_prefix "abc" (plus (chr 'a'))|} (plus (chr 'a')) "abc";
+      [%expect
+        {|
+          "match_prefix \"abc\" (str \"abc\")": 3
+          "match_prefix \"bac\" (str \"abc\")": None
+          "match_prefix \"abc\" (str \"abcd\")": None
+          "match_prefix \"abc\" (str \"ab\")": 2
+          "match_prefix \"abc\" (str \"\")": 0
+          "match_prefix \"abc\" (plus (chr 'a'))": 1 |}]
+    ;;
+
+    let%expect_test "match_prefix'" =
+      let go title re str' ix =
+        Fmt.(
+          pr "%S: %a@." title (option ~none:(any "None") int) (match_prefix' str' ix re))
+      in
+      go {|match_prefix' "bac" (str "ac") 0|} (str "ac") "bac" 0;
+      go {|match_prefix' "bac" (str "ac") 1|} (str "ac") "bac" 1;
+      [%expect
+        {|
+        "match_prefix' \"bac\" (str \"ac\") 0": None
+        "match_prefix' \"bac\" (str \"ac\") 1": 3 |}]
     ;;
 
     let%expect_test "matches_prefix" =
