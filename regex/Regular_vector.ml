@@ -35,7 +35,7 @@ let%test_module "Dfa.make" =
 
     open Dfa
 
-    let go vec = vec |> make |> Fmt.pr "%a@." pp
+    let go vec = Fmt.pr "%a@." pp (make vec)
 
     let%expect_test "fusing lexing and parsing figure 3" =
       go lexer;
@@ -67,7 +67,7 @@ let derivatives res =
            Some (delta rep res, set)))
 ;;
 
-let%test_module _ =
+let%test_module "derivatives" =
   (module struct
     let go res =
       let open Fmt in
