@@ -166,7 +166,19 @@ let string_delta str =
   loop 0
 ;;
 
-let matches str re = nullable (string_delta str re)
+let is_full_match str re = nullable (string_delta str re)
+
+let matches_prefix str =
+  let len = String.length str in
+  let rec loop i re =
+    if nullable re
+    then true
+    else if Int.(i >= len)
+    then false
+    else loop (i + 1) (delta (Uchar.of_char (String.unsafe_get str i)) re)
+  in
+  loop 0
+;;
 
 (* Approximate derivative class for a regex. *)
 let rec class' =
@@ -353,14 +365,32 @@ let%test_module _ =
           "string_delta \"ba\" (str \"abc\")": [] |}]
     ;;
 
-    let%expect_test "matches" =
-      let go title re str = Fmt.pr "%S: %b@." title (matches str re) in
-      go {|matches "abc" (str "abc")|} (str "abc") "abc";
-      go {|matches "bac" (str "abc")|} (str "abc") "bac";
+    let%expect_test "is_full_match" =
+      let go title re str = Fmt.pr "%S: %b@." title (is_full_match str re) in
+      go {|is_full_match "abc" (str "abc")|} (str "abc") "abc";
+      go {|is_full_match "bac" (str "abc")|} (str "abc") "bac";
+      go {|is_full_match "abc" (str "ab")|} (str "ab") "abc";
       [%expect
         {|
-          "matches \"abc\" (str \"abc\")": true
-          "matches \"bac\" (str \"abc\")": false |}]
+          "is_full_match \"abc\" (str \"abc\")": true
+          "is_full_match \"bac\" (str \"abc\")": false
+          "is_full_match \"abc\" (str \"ab\")": false |}]
+    ;;
+
+    let%expect_test "matches_prefix" =
+      let go title re str = Fmt.pr "%S: %b@." title (matches_prefix str re) in
+      go {|matches_prefix "abc" (str "abc")|} (str "abc") "abc";
+      go {|matches_prefix "bac" (str "abc")|} (str "abc") "bac";
+      go {|matches_prefix "abc" (str "ab")|} (str "ab") "abc";
+      go {|matches_prefix "abc" (str "")|} (str "") "abc";
+      go {|matches_prefix "abc" (plus (chr 'a'))|} (plus (chr 'a')) "abc";
+      [%expect
+        {|
+          "matches_prefix \"abc\" (str \"abc\")": true
+          "matches_prefix \"bac\" (str \"abc\")": false
+          "matches_prefix \"abc\" (str \"ab\")": true
+          "matches_prefix \"abc\" (str \"\")": true
+          "matches_prefix \"abc\" (plus (chr 'a'))": true |}]
     ;;
   end)
 ;;

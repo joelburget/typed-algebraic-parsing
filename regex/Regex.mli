@@ -65,8 +65,11 @@ val delta : Uchar.t -> t -> t
 (** Take the iterated derivative of a regex. *)
 val string_delta : string -> t -> t
 
-(** Does the regex match this string? *)
-val matches : string -> t -> bool
+(** Does the regex match this entire string? *)
+val is_full_match : string -> t -> bool
+
+(** Does the regex match a prefix of this string? *)
+val matches_prefix : string -> t -> bool
 
 (** Compute an approximate derivative class. *)
 val class' : t -> Derivative_class.t
