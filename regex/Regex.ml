@@ -174,7 +174,7 @@ let match_prefix' str =
   let rec loop previous_matched i re =
     let matched = nullable re in
     if Int.(i >= len)
-    then if previous_matched then Some (i - 1) else if matched then Some i else None
+    then if matched then Some i else if previous_matched then Some (i - 1) else None
     else if previous_matched && not matched
     then Some (i - 1)
     else loop matched (i + 1) (delta (Uchar.of_char (String.unsafe_get str i)) re)
@@ -418,12 +418,17 @@ let%test_module _ =
         Fmt.(
           pr "%S: %a@." title (option ~none:(any "None") int) (match_prefix' str' ix re))
       in
+      let comment =
+        str "//" >>> star (char_class Char_class.(negate (Char.singleton '\n')))
+      in
       go {|match_prefix' "bac" (str "ac") 0|} (str "ac") "bac" 0;
       go {|match_prefix' "bac" (str "ac") 1|} (str "ac") "bac" 1;
+      go {|match_prefix' "// comment" comment 0|} comment "// comment" 0;
       [%expect
         {|
         "match_prefix' \"bac\" (str \"ac\") 0": None
-        "match_prefix' \"bac\" (str \"ac\") 1": 3 |}]
+        "match_prefix' \"bac\" (str \"ac\") 1": 3
+        "match_prefix' \"// comment\" comment 0": 10 |}]
     ;;
 
     let%expect_test "matches_prefix" =
