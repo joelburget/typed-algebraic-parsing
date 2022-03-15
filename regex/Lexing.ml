@@ -5,7 +5,8 @@ type 'a action =
   | Error of string
   | Return of 'a
 
-type 'a t = (Regex.t * 'a action) list
+type 'a rule = Regex.t * 'a action
+type 'a t = 'a rule list
 
 type match_location =
   { start : int

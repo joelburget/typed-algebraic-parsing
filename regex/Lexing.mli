@@ -3,12 +3,14 @@ type 'a action =
   | Error of string
   | Return of 'a
 
+type 'a rule = Regex.t * 'a action
+
 (** A lexer is a list of regex, action pairs.
 
     If serveral regexes match a prefix of the input, we use the longest match. If there
     are multiple longest matches we use the earlier rule. These are the same precedence
     rules that ocamllex uses. *)
-type 'a t = (Regex.t * 'a action) list
+type 'a t = 'a rule list
 
 (** Location of a matched token. [start] is the location of the first character matched,
     [finish] is one past the end. *)
