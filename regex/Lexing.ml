@@ -42,31 +42,40 @@ let lex rules str = lex' rules str 0
 
 let%test_module "lex" =
   (module struct
+    let pp_action ppf action =
+      let open Fmt in
+      match action with
+      | Skip -> pf ppf "Skip"
+      | Error msg -> pf ppf "Error %S" msg
+      | Return x -> pf ppf "Return %d" x
+    ;;
+
+    let pp_match_location =
+      Fmt.(
+        braces
+          (record
+             ~sep:semi
+             [ field "start" (fun loc -> loc.start) int
+             ; field "finish" (fun loc -> loc.finish) int
+             ]))
+    ;;
+
+    let pp_token = Fmt.(parens (pair ~sep:semi pp_match_location pp_action))
+
+    let pp ppf result =
+      match result with
+      | Ok actions -> Fmt.(brackets (list pp_token ~sep:semi)) ppf actions
+      | Error pos -> Fmt.pf ppf "Error %d" pos
+    ;;
+
+    let go rules str = Fmt.pr "%a@." pp (lex rules str)
+
     let%expect_test _ =
-      let pp_action ppf action =
-        let open Fmt in
-        match action with
-        | Skip -> pf ppf "Skip"
-        | Error msg -> pf ppf "Error %S" msg
-        | Return x -> pf ppf "Return %d" x
-      in
-      let pp_match_location =
-        Fmt.(
-          braces
-            (record
-               ~sep:semi
-               [ field "start" (fun loc -> loc.start) int
-               ; field "finish" (fun loc -> loc.finish) int
-               ]))
-      in
-      let pp_token = Fmt.(parens (pair ~sep:semi pp_match_location pp_action)) in
-      let pp ppf result =
-        match result with
-        | Ok actions -> Fmt.(brackets (list pp_token ~sep:semi)) ppf actions
-        | Error pos -> Fmt.pf ppf "Error %d" pos
-      in
-      let go rules str = Fmt.pr "%a@." pp (lex rules str) in
       go [] "abc";
+      [%expect {| Error 0 |}]
+    ;;
+
+    let%expect_test _ =
       let rules = Regex.[ str "abc", Return 3; str "ab", Return 2; str "a", Return 1 ] in
       go rules "a";
       go rules "ab";
@@ -74,7 +83,6 @@ let%test_module "lex" =
       go rules "abcaba";
       [%expect
         {|
-        Error 0
         [({start: 0;
            finish: 1}; Return 1)]
         [({start: 0;
@@ -87,6 +95,31 @@ let%test_module "lex" =
            finish: 5}; Return 2);
          ({start: 5;
            finish: 6}; Return 1)] |}]
+    ;;
+
+    let%expect_test _ =
+      let escaped_char = Regex.(chr '\\' >>> any) in
+      let double_quoted =
+        let non_escaped = Char_class.(negate (of_string "\"\\")) in
+        Regex.(chr '"' >>> star (escaped_char || char_class non_escaped) >>> chr '"')
+      in
+      go [ double_quoted, Return 1 ] {|"str \" abc"|};
+      [%expect {|
+        [({start: 0;
+           finish: 12}; Return 1)] |}]
+    ;;
+
+    let%expect_test _ =
+      let rules =
+        [ Regex.(
+            ( str "//" >>> star (char_class Char_class.(negate (Char.singleton '\n')))
+            , Return 1 ))
+        ]
+      in
+      go rules "// comment";
+      [%expect {|
+        [({start: 0;
+           finish: 10}; Return 1)] |}]
     ;;
   end)
 ;;
