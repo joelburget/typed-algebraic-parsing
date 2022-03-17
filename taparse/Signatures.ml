@@ -142,11 +142,18 @@ module type Construction = sig
   val eps : 'a v -> 'a t
   val tok : token_set -> token t
   val bot : 'a t
-  val seq : 'a t -> 'b t -> ('a * 'b) t
-  val alt : ?failure_msg:string -> 'a t -> 'a t -> 'a t
-  val map : ('a v -> 'b v) -> 'a t -> 'b t
-  val fix : ('b t -> 'b t) -> 'b t
-  val star : 'a t -> 'a list t
+  val seq : ?provenance:Prelude.Grammar_provenance.t -> 'a t -> 'b t -> ('a * 'b) t
+
+  val alt
+    :  ?provenance:Prelude.Grammar_provenance.t
+    -> ?failure_msg:string
+    -> 'a t
+    -> 'a t
+    -> 'a t
+
+  val map : ?provenance:Prelude.Grammar_provenance.t -> ('a v -> 'b v) -> 'a t -> 'b t
+  val fix : ?provenance:Prelude.Grammar_provenance.t -> ('b t -> 'b t) -> 'b t
+  val star : ?provenance:Prelude.Grammar_provenance.t -> 'a t -> 'a list t
   val ( <?> ) : 'a t -> string -> 'a t
   val fail : string -> 'a t
 end

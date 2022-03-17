@@ -36,7 +36,10 @@ struct
   let bot = { first = empty; flast = empty; null = false; guarded = true }
   let eps = { first = empty; flast = empty; null = true; guarded = true }
   let tok set = { first = set; flast = empty; null = false; guarded = true }
-  let separable t1 t2 = Token.Set.(is_empty (inter t1.flast t2.first)) && not t1.null
+
+  let separable t1 t2 =
+    Token.Set.(is_empty (inter t1.flast t2.first)) && not (t1.null && t2.null)
+  ;;
 
   let apart t1 t2 =
     Token.Set.(is_empty (inter t1.first t2.first)) && not (t1.null && t2.null)
@@ -44,26 +47,32 @@ struct
 
   let pp_labels ppf labels = Fmt.(list string ~sep:(any ".")) ppf (List.rev labels)
 
+  let pp_labels ppf = function
+    | [] -> Fmt.nop ppf ()
+    | labels -> Fmt.pf ppf " %a" (Fmt.parens pp_labels) labels
+  ;;
+
   let alt labels pp_g t1 t2 =
     Prelude.type_assert (apart t1 t2) (fun ppf () ->
         Fmt.pf
           ppf
           "@[<v 2>alt must be apart@;\
            @[(%a@ vs@ %a)@]@;\
-           @[<v 2>parser @[(%a)@]:@ %a@]@;\
            conditions:@;\
            <0 2>(is_empty (inter t1.first t2.first)): %b@;\
-           <0 2>not (t1.null && t2.null):%b@]"
+           <0 2>not (t1.null && t2.null):%b@;\
+           @[<v 2>parser%a:@ %a@]@;\
+           @]"
           pp
           t1
           pp
           t2
+          Token.Set.(is_empty (inter t1.first t2.first))
+          (not (t1.null && t2.null))
           pp_labels
           labels
           pp_g
-          ()
-          Token.Set.(is_empty (inter t1.first t2.first))
-          (not (t1.null && t2.null)));
+          ());
     { first = Token.Set.union t1.first t2.first
     ; flast = Token.Set.union t1.flast t2.flast
     ; null = t1.null || t2.null
@@ -77,20 +86,21 @@ struct
           ppf
           "@[<v 2>seq must be separable@;\
            @[(%a@ vs@ %a)@]@;\
-           @[<v 2>parser @[(%a)@]:@ %a@]@;\
            conditions:@;\
            <0 2>(is_empty (inter t1.flast t2.first)): %b@;\
-           <0 2>not t1.null: %b@]"
+           <0 2>not t1.null: %b@;\
+           @[<v 2>parser%a:@ %a@]@;\
+           @]"
           pp
           t1
           pp
           t2
+          Token.Set.(is_empty (inter t1.flast t2.first))
+          (not t1.null)
           pp_labels
           labels
           pp_g
-          ()
-          Token.Set.(is_empty (inter t1.flast t2.first))
-          (not t1.null));
+          ());
     { first = t1.first
     ; flast = Token.Set.union t2.flast (t2.null ==> Token.Set.union t2.first t1.flast)
     ; null = false

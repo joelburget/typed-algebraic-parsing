@@ -99,14 +99,23 @@ module Make (Token_stream : Signatures.Token_stream) :
   module Grammar = struct
     type ('ctx, 'a, 'd) t' =
       | Eps : 'a -> ('ctx, 'a, 'd) t'
-      | Seq : ('ctx, 'a, 'd) t * ('ctx, 'b, 'd) t -> ('ctx, 'a * 'b, 'd) t'
+      | Seq :
+          Prelude.Grammar_provenance.t * ('ctx, 'a, 'd) t * ('ctx, 'b, 'd) t
+          -> ('ctx, 'a * 'b, 'd) t'
       | Tok : Token.Set.t -> ('ctx, Token.t, 'd) t'
       | Bot : ('ctx, 'a, 'd) t'
-      | Alt : string option * ('ctx, 'a, 'd) t * ('ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
-      | Map : ('a -> 'b) * ('ctx, 'a, 'd) t -> ('ctx, 'b, 'd) t'
+      | Alt :
+          Prelude.Grammar_provenance.t
+          * string option
+          * ('ctx, 'a, 'd) t
+          * ('ctx, 'a, 'd) t
+          -> ('ctx, 'a, 'd) t'
+      | Map :
+          Prelude.Grammar_provenance.t * ('a -> 'b) * ('ctx, 'a, 'd) t
+          -> ('ctx, 'b, 'd) t'
       | Annot : string * ('ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
-      | Fix : ('a * 'ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
-      | Star : ('ctx, 'a, 'd) t -> ('ctx, 'a list, 'd) t'
+      | Fix : Prelude.Grammar_provenance.t * ('a * 'ctx, 'a, 'd) t -> ('ctx, 'a, 'd) t'
+      | Star : Prelude.Grammar_provenance.t * ('ctx, 'a, 'd) t -> ('ctx, 'a list, 'd) t'
       | Var : ('ctx, 'a) Var.t -> ('ctx, 'a, 'd) t'
       | Fail : string -> ('ctx, 'a, 'd) t'
 
@@ -114,58 +123,59 @@ module Make (Token_stream : Signatures.Token_stream) :
 
     let data (d, _) = d
 
-    (*
-    let rec pp_full : type ctx a d. (ctx, a, d) t' Fmt.t =
-     fun ppf -> function
-      | Eps _ -> Fmt.pf ppf "Eps"
-      | Seq ((_, a), (_, b)) -> Fmt.pf ppf "Seq (%a, %a)" pp_full a pp_full b
-      | Tok tok_set -> Fmt.pf ppf "Tok %a" Token.Set.pp tok_set
-      | Bot -> Fmt.pf ppf "Bot"
-      | Alt (_msg, (_, a), (_, b)) -> Fmt.pf ppf "Alt (%a, %a)" pp_full a pp_full b
-      | Map (_, (_, a)) -> Fmt.pf ppf "Map (_, %a)" pp_full a
-      | Annot (msg, (_, a)) -> Fmt.pf ppf "%a <$> %S" pp_full a msg
-      | Fix (_, a) -> Fmt.pf ppf "Fix %a" pp_full a
-      | Star (_, a) -> Fmt.pf ppf "Star %a" pp_full a
-      | Var v -> Fmt.pf ppf "Var %a" Var.pp v
-      | Fail msg -> Fmt.pf ppf "Fail %S" msg
-   ;;
-       *)
-
-    let label : type ctx a d. (ctx, a, d) t' -> string = function
-      | Annot (msg, _) -> msg
-      | Eps _ -> "Eps"
-      | Seq _ -> "Seq"
-      | Tok tok_set -> Fmt.str "Tok %a" Token.Set.pp tok_set
-      | Bot -> "Bot"
-      | Alt (msg, _, _) ->
-        (match msg with None -> "Alt" | Some msg -> Fmt.str "Alt %S" msg)
-      | Map _ -> "Map"
-      | Fix _ -> "Fix"
-      | Star _ -> "Star"
-      | Var v -> Fmt.str "Var %a" Var.pp v
-      | Fail msg -> Fmt.str "Fail %S" msg
+    let label : type ctx a d. (ctx, a, d) t' -> string option = function
+      | Seq _ | Alt _ | Map _ | Fix _ | Star _ -> None
+      | Annot (msg, _) -> Some msg
+      | Eps _ -> Some "Eps"
+      | Tok tok_set -> Some (Fmt.str "Tok %a" Token.Set.pp tok_set)
+      | Bot -> Some "Bot"
+      | Var v -> Some (Fmt.str "Var %a" Var.pp v)
+      | Fail msg -> Some (Fmt.str "Fail %S" msg)
     ;;
 
     let mk_tree : type ctx a d. (ctx, a, d) t' -> Prelude.Tree.t =
-      let open Prelude.Tree in
-      let rec collect_children : type ctx a d. (ctx, a, d) t' -> Prelude.Tree.t =
-       fun g ->
+      let open Prelude in
+      let open Grammar_provenance in
+      let open Tree in
+      let rec collect_children
+          : type ctx a d. Tree.t list -> (ctx, a, d) t' -> Tree.t list
+        =
+       fun children g ->
         match g with
-        | Annot (msg, (_, t)) -> mk msg [ collect_children t ]
-        | Eps _ -> mk "Eps" []
-        | Seq ((_, a), (_, b)) -> mk "Seq" [ collect_children a; collect_children b ]
-        | Tok tok_set -> mk (Fmt.str "Tok %a" Token.Set.pp tok_set) []
-        | Bot -> mk "Bot" []
-        | Alt (msg, (_, a), (_, b)) ->
-          let label = match msg with None -> "Alt" | Some msg -> Fmt.str "Alt %S" msg in
-          mk label [ collect_children a; collect_children b ]
-        | Map (_, (_, a)) -> mk "Map" [ mk "_" []; collect_children a ]
-        | Fix (_, a) -> mk "Fix" [ collect_children a ]
-        | Star (_, a) -> mk "Star" [ collect_children a ]
-        | Var v -> mk (Fmt.str "Var %a" Var.pp v) []
-        | Fail msg -> mk (Fmt.str "Fail %S" msg) []
+        | Annot (msg, (_, t)) -> mk msg (collect_children [] t) :: children
+        | Eps _ -> mk "Eps" [] :: children
+        | Seq (provenance, (_, a), (_, b)) -> binary provenance children "Seq" a b
+        | Tok tok_set -> mk (Fmt.str "Tok %a" Token.Set.pp tok_set) [] :: children
+        | Bot -> mk "Bot" [] :: children
+        | Alt (provenance, msg, (_, a), (_, b)) ->
+          let label =
+            match msg with None -> "Alt" | Some msg -> Fmt.str "Alt ~failure_msg:%S" msg
+          in
+          binary provenance children label a b
+        | Map (provenance, _, (_, a)) -> unary provenance children "Map" a
+        | Fix (provenance, (_, a)) -> unary provenance children "Fix" a
+        | Star (provenance, (_, a)) -> unary provenance children "Star" a
+        | Var v -> mk (Fmt.str "Var %a" Var.pp v) [] :: children
+        | Fail msg -> mk (Fmt.str "Fail %S" msg) [] :: children
+      and binary : type ctx a b d. _ -> _ -> _ -> (ctx, a, d) t' -> (ctx, b, d) t' -> _ =
+       fun provenance children label a b ->
+        match provenance with
+        | User_defined ->
+          let children' = collect_children (collect_children [] a) b in
+          mk label children' :: children
+        | Generated -> collect_children (collect_children children a) b
+      and unary : type ctx a d. _ -> _ -> _ -> (ctx, a, d) t' -> _ =
+       fun provenance children label a ->
+        match provenance with
+        | User_defined ->
+          let children' = collect_children [] a in
+          mk label children' :: children
+        | Generated -> collect_children children a
       in
-      collect_children
+      fun g0 ->
+        match collect_children [] g0 with
+        | [ child ] -> child
+        | children -> mk "(root)" children
     ;;
 
     let pp_tree : type ctx a d. (ctx, a, d) t' Fmt.t =
@@ -182,32 +192,34 @@ module Make (Token_stream : Signatures.Token_stream) :
         =
        fun labels env (_, g) ->
         let pp_g ppf () = pp_tree ppf g in
-        let labels = label g :: labels in
+        let labels =
+          match label g with None -> labels | Some label -> label :: labels
+        in
         match g with
         | Eps a -> Type.eps, Eps a
-        | Seq (g1, g2) ->
+        | Seq (provenance, g1, g2) ->
           let env' = Type_env.map { f = (fun ty -> { ty with guarded = true }) } env in
           let g1 = typeof labels env g1 in
           let g2 = typeof labels env' g2 in
-          Type.seq labels pp_g (data g1) (data g2), Seq (g1, g2)
+          Type.seq labels pp_g (data g1) (data g2), Seq (provenance, g1, g2)
         | Tok set -> Type.tok set, Tok set
         | Bot -> Type.bot, Bot
-        | Alt (msg, g1, g2) ->
+        | Alt (provenance, msg, g1, g2) ->
           let g1 = typeof labels env g1 in
           let g2 = typeof labels env g2 in
-          Type.alt labels pp_g (data g1) (data g2), Alt (msg, g1, g2)
-        | Map (f, g) ->
+          Type.alt labels pp_g (data g1) (data g2), Alt (provenance, msg, g1, g2)
+        | Map (provenance, f, g) ->
           let g = typeof labels env g in
-          data g, Map (f, g)
-        | Fix g' ->
+          data g, Map (provenance, f, g)
+        | Fix (provenance, g') ->
           let ty = Type.fix (fun ty -> data (typeof labels (ty :: env) g')) in
           Prelude.type_assert ty.Type.guarded (fun ppf () ->
               Fmt.pf ppf "fix must be guarded @[(%a@ ->@ %a)@]" pp_labels labels pp_tree g);
           let g' = typeof labels (ty :: env) g' in
-          data g', Fix g'
-        | Star g' ->
+          data g', Fix (provenance, g')
+        | Star (provenance, g') ->
           let g' = typeof labels env g' in
-          Type.star labels pp_g (data g'), Star g'
+          Type.star labels pp_g (data g'), Star (provenance, g')
         | Var v -> Type_env.lookup env v, Var v
         | Annot (msg, a) ->
           let g = typeof labels env a in
@@ -229,16 +241,16 @@ module Make (Token_stream : Signatures.Token_stream) :
     let open Parse in
     match g with
     | Eps a -> eps a
-    | Seq (g1, g2) ->
+    | Seq (_provenance, g1, g2) ->
       let p1 = parse g1 env stack in
       let p2 = parse g2 env stack in
       seq p1 p2
     | Tok set -> tok set
     | Bot -> bot
-    | Alt (msg, g1, g2) ->
+    | Alt (_provenance, msg, g1, g2) ->
       alt msg stack (data g1) (parse g1 env stack) (data g2) (parse g2 env stack)
-    | Map (f, g) -> parse g env stack |> map f
-    | Star g ->
+    | Map (_provenance, f, g) -> parse g env stack |> map f
+    | Star (_provenance, g) ->
       let p = parse g env stack in
       let first_set = (data g).Type.first in
       let rec go ret s =
@@ -247,7 +259,7 @@ module Make (Token_stream : Signatures.Token_stream) :
         | _ -> List.rev ret
       in
       go []
-    | Fix g ->
+    | Fix (_provenance, g) ->
       let r = ref (fun _ -> assert false) in
       let p s = !r s in
       let q = parse g (p :: env) stack in
@@ -276,27 +288,36 @@ module Make (Token_stream : Signatures.Token_stream) :
     let eps a = { tdb = (fun _ -> (), Eps a) }
     let tok c = { tdb = (fun _ -> (), Tok c) }
     let bot = { tdb = (fun _ -> (), Bot) }
-    let seq f g = { tdb = (fun ctx -> (), Seq (f.tdb ctx, g.tdb ctx)) }
 
-    let alt ?failure_msg x y =
-      { tdb = (fun ctx -> (), Alt (failure_msg, x.tdb ctx, y.tdb ctx)) }
+    let seq ?(provenance = Prelude.Grammar_provenance.User_defined) f g =
+      { tdb = (fun ctx -> (), Seq (provenance, f.tdb ctx, g.tdb ctx)) }
     ;;
 
-    let map f a = { tdb = (fun ctx -> (), Map (f, a.tdb ctx)) }
+    let alt ?(provenance = Prelude.Grammar_provenance.User_defined) ?failure_msg x y =
+      { tdb = (fun ctx -> (), Alt (provenance, failure_msg, x.tdb ctx, y.tdb ctx)) }
+    ;;
+
+    let map ?(provenance = Prelude.Grammar_provenance.User_defined) f a =
+      { tdb = (fun ctx -> (), Map (provenance, f, a.tdb ctx)) }
+    ;;
+
     let ( <?> ) a msg = { tdb = (fun ctx -> (), Annot (msg, a.tdb ctx)) }
 
-    let fix : type b. (b t -> b t) -> b t =
-     fun f ->
+    let fix : type b. ?provenance:Prelude.Grammar_provenance.t -> (b t -> b t) -> b t =
+     fun ?(provenance = Prelude.Grammar_provenance.User_defined) f ->
       let tdb : type c. c ctx -> (c, b, unit) grammar =
        fun i ->
         let bt : b t = f { tdb = (fun j -> (), Var (Tshift.tshift j (() :: i))) } in
         let gram : (b * c, b, unit) grammar = bt.tdb (() :: i) in
-        (), Fix gram
+        (), Fix (provenance, gram)
       in
       { tdb }
    ;;
 
-    let star g = { tdb = (fun p -> (), Star (g.tdb p)) }
+    let star ?(provenance = Prelude.Grammar_provenance.User_defined) g =
+      { tdb = (fun p -> (), Star (provenance, g.tdb p)) }
+    ;;
+
     let fail msg = { tdb = (fun _ -> (), Fail msg) }
   end
 

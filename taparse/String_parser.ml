@@ -121,18 +121,10 @@ let%test_module _ =
          flast: [];
          null: false;
          guarded: true}
-        seq must be separable
-          ({first: a;
-            flast: a;
-            null: true;
-            guarded: true}
-          vs {first: b;
-              flast: [];
-              null: false;
-              guarded: true})
-          conditions:
-            (is_empty (inter t1.flast t2.first)): true
-            not t1.null: false
+        {first: a;
+         flast: [];
+         null: false;
+         guarded: true}
         alt must be apart
           ({first: a;
             flast: a;
@@ -142,23 +134,20 @@ let%test_module _ =
               flast: b;
               null: false;
               guarded: true})
-          parser (Alt):
-            Alt
-              Map
-                _
-                Seq
-                  Tok a
-                  Star
-                    Tok a
-              Map
-                _
-                Seq
-                  Tok a
-                  Star
-                    Tok b
           conditions:
             (is_empty (inter t1.first t2.first)): false
-            not (t1.null && t2.null):true |}]
+            not (t1.null && t2.null):true
+          parser:
+            Alt
+              ==>
+                Seq
+                  Star
+                    Tok b
+                  Tok a
+              plus
+                Star
+                  Tok a
+                Tok a |}]
     ;;
 
     let go p pp str =
@@ -210,7 +199,7 @@ let%test_module _ =
       [%expect {|
         a
         b
-        failed parse: No progress possible |}]
+        failed parse: No progress possible (<|>) |}]
     ;;
 
     let%expect_test "star, plus, map" =
@@ -275,9 +264,10 @@ let%test_module _ =
     let%expect_test "fail" =
       let go' = go (fail "msg" <?> "foo" <?> "bar") Token.pp in
       go' "A";
-      [%expect {|
-        failed parse: msg (foo,
-        bar) |}]
+      [%expect
+        {|
+      failed parse: msg (foo,
+      bar) |}]
     ;;
 
     let%expect_test "sexp" =

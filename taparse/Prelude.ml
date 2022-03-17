@@ -40,6 +40,12 @@ exception Type_error of unit Fmt.t
 
 let type_assert b msg = if not b then raise (Type_error msg)
 
+module Grammar_provenance = struct
+  type t =
+    | Generated
+    | User_defined
+end
+
 module Tree : sig
   type t =
     { label : string
