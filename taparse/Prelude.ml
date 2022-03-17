@@ -6,6 +6,13 @@ module Var = struct
   type ('ctx, 'a) t =
     | Z : ('a * 'ctx, 'a) t
     | S : ('rest, 'a) t -> ('b * 'rest, 'a) t
+
+  let rec count : type ctx a. (ctx, a) t -> int = function
+    | Z -> 0
+    | S rest -> count rest + 1
+  ;;
+
+  let pp ppf t = Fmt.pf ppf "%d" (count t)
 end
 
 module Env (T : sig
@@ -32,3 +39,51 @@ end
 exception Type_error of unit Fmt.t
 
 let type_assert b msg = if not b then raise (Type_error msg)
+
+module Tree : sig
+  type t =
+    { label : string
+    ; children : t list
+    }
+
+  val mk : string -> t list -> t
+  val pp : t Fmt.t
+end = struct
+  type t =
+    { label : string
+    ; children : t list
+    }
+
+  let rec pp ppf { label; children } =
+    match children with
+    | [] -> Fmt.string ppf label
+    | _ -> Fmt.(vbox ~indent:2 (pair string (list pp))) ppf (label, children)
+  ;;
+
+  let mk label children = { label; children }
+  let go = Fmt.pr "%a@." pp
+
+  let%expect_test _ =
+    go (mk "root" []);
+    [%expect {| root |}]
+  ;;
+
+  let%expect_test _ =
+    let t =
+      mk
+        "root"
+        [ mk "a" [ mk "c" []; mk "d" []; mk "e" [] ]; mk "b" [ mk "f" []; mk "g" [] ] ]
+    in
+    go t;
+    [%expect
+      {|
+      root
+        a
+          c
+          d
+          e
+        b
+          f
+          g |}]
+  ;;
+end

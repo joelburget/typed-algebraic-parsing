@@ -142,6 +142,20 @@ let%test_module _ =
               flast: b;
               null: false;
               guarded: true})
+          parser (Alt):
+            Alt
+              Map
+                _
+                Seq
+                  Tok a
+                  Star
+                    Tok a
+              Map
+                _
+                Seq
+                  Tok a
+                  Star
+                    Tok b
           conditions:
             (is_empty (inter t1.first t2.first)): false
             not (t1.null && t2.null):true |}]

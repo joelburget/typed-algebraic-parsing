@@ -114,37 +114,107 @@ module Make (Token_stream : Signatures.Token_stream) :
 
     let data (d, _) = d
 
-    let rec typeof : type ctx a d. ctx Type_env.t -> (ctx, a, d) t -> (ctx, a, Type.t) t =
-     fun env (_, g) ->
-      match g with
-      | Eps a -> Type.eps, Eps a
-      | Seq (g1, g2) ->
-        let env' = Type_env.map { f = (fun ty -> { ty with guarded = true }) } env in
-        let g1 = typeof env g1 in
-        let g2 = typeof env' g2 in
-        Type.seq (data g1) (data g2), Seq (g1, g2)
-      | Tok set -> Type.tok set, Tok set
-      | Bot -> Type.bot, Bot
-      | Alt (msg, g1, g2) ->
-        let g1 = typeof env g1 in
-        let g2 = typeof env g2 in
-        Type.alt (data g1) (data g2), Alt (msg, g1, g2)
-      | Map (f, g) ->
-        let g = typeof env g in
-        data g, Map (f, g)
-      | Fix g ->
-        let ty = Type.fix (fun ty -> data (typeof (ty :: env) g)) in
-        Prelude.type_assert ty.Type.guarded (Fmt.any "fix must be guarded");
-        let g = typeof (ty :: env) g in
-        data g, Fix g
-      | Star g ->
-        let g = typeof env g in
-        Type.star (data g), Star g
-      | Var v -> Type_env.lookup env v, Var v
-      | Annot (msg, a) ->
-        let g = typeof env a in
-        data g, Annot (msg, g)
-      | Fail msg -> Type.eps, Fail msg
+    (*
+    let rec pp_full : type ctx a d. (ctx, a, d) t' Fmt.t =
+     fun ppf -> function
+      | Eps _ -> Fmt.pf ppf "Eps"
+      | Seq ((_, a), (_, b)) -> Fmt.pf ppf "Seq (%a, %a)" pp_full a pp_full b
+      | Tok tok_set -> Fmt.pf ppf "Tok %a" Token.Set.pp tok_set
+      | Bot -> Fmt.pf ppf "Bot"
+      | Alt (_msg, (_, a), (_, b)) -> Fmt.pf ppf "Alt (%a, %a)" pp_full a pp_full b
+      | Map (_, (_, a)) -> Fmt.pf ppf "Map (_, %a)" pp_full a
+      | Annot (msg, (_, a)) -> Fmt.pf ppf "%a <$> %S" pp_full a msg
+      | Fix (_, a) -> Fmt.pf ppf "Fix %a" pp_full a
+      | Star (_, a) -> Fmt.pf ppf "Star %a" pp_full a
+      | Var v -> Fmt.pf ppf "Var %a" Var.pp v
+      | Fail msg -> Fmt.pf ppf "Fail %S" msg
+   ;;
+       *)
+
+    let label : type ctx a d. (ctx, a, d) t' -> string = function
+      | Annot (msg, _) -> msg
+      | Eps _ -> "Eps"
+      | Seq _ -> "Seq"
+      | Tok tok_set -> Fmt.str "Tok %a" Token.Set.pp tok_set
+      | Bot -> "Bot"
+      | Alt (msg, _, _) ->
+        (match msg with None -> "Alt" | Some msg -> Fmt.str "Alt %S" msg)
+      | Map _ -> "Map"
+      | Fix _ -> "Fix"
+      | Star _ -> "Star"
+      | Var v -> Fmt.str "Var %a" Var.pp v
+      | Fail msg -> Fmt.str "Fail %S" msg
+    ;;
+
+    let mk_tree : type ctx a d. (ctx, a, d) t' -> Prelude.Tree.t =
+      let open Prelude.Tree in
+      let rec collect_children : type ctx a d. (ctx, a, d) t' -> Prelude.Tree.t =
+       fun g ->
+        match g with
+        | Annot (msg, (_, t)) -> mk msg [ collect_children t ]
+        | Eps _ -> mk "Eps" []
+        | Seq ((_, a), (_, b)) -> mk "Seq" [ collect_children a; collect_children b ]
+        | Tok tok_set -> mk (Fmt.str "Tok %a" Token.Set.pp tok_set) []
+        | Bot -> mk "Bot" []
+        | Alt (msg, (_, a), (_, b)) ->
+          let label = match msg with None -> "Alt" | Some msg -> Fmt.str "Alt %S" msg in
+          mk label [ collect_children a; collect_children b ]
+        | Map (_, (_, a)) -> mk "Map" [ mk "_" []; collect_children a ]
+        | Fix (_, a) -> mk "Fix" [ collect_children a ]
+        | Star (_, a) -> mk "Star" [ collect_children a ]
+        | Var v -> mk (Fmt.str "Var %a" Var.pp v) []
+        | Fail msg -> mk (Fmt.str "Fail %S" msg) []
+      in
+      collect_children
+    ;;
+
+    let pp_tree : type ctx a d. (ctx, a, d) t' Fmt.t =
+     fun ppf t -> Prelude.Tree.pp ppf (mk_tree t)
+   ;;
+
+    let pp_labels ppf labels = Fmt.(list string ~sep:(any ".")) ppf (List.rev labels)
+
+    let typeof : type ctx a d. ctx Type_env.t -> (ctx, a, d) t -> (ctx, a, Type.t) t =
+     fun env g0 ->
+      let rec typeof
+          : type ctx a d.
+            string list -> ctx Type_env.t -> (ctx, a, d) t -> (ctx, a, Type.t) t
+        =
+       fun labels env (_, g) ->
+        let pp_g ppf () = pp_tree ppf g in
+        let labels = label g :: labels in
+        match g with
+        | Eps a -> Type.eps, Eps a
+        | Seq (g1, g2) ->
+          let env' = Type_env.map { f = (fun ty -> { ty with guarded = true }) } env in
+          let g1 = typeof labels env g1 in
+          let g2 = typeof labels env' g2 in
+          Type.seq labels pp_g (data g1) (data g2), Seq (g1, g2)
+        | Tok set -> Type.tok set, Tok set
+        | Bot -> Type.bot, Bot
+        | Alt (msg, g1, g2) ->
+          let g1 = typeof labels env g1 in
+          let g2 = typeof labels env g2 in
+          Type.alt labels pp_g (data g1) (data g2), Alt (msg, g1, g2)
+        | Map (f, g) ->
+          let g = typeof labels env g in
+          data g, Map (f, g)
+        | Fix g' ->
+          let ty = Type.fix (fun ty -> data (typeof labels (ty :: env) g')) in
+          Prelude.type_assert ty.Type.guarded (fun ppf () ->
+              Fmt.pf ppf "fix must be guarded @[(%a@ ->@ %a)@]" pp_labels labels pp_tree g);
+          let g' = typeof labels (ty :: env) g' in
+          data g', Fix g'
+        | Star g' ->
+          let g' = typeof labels env g' in
+          Type.star labels pp_g (data g'), Star g'
+        | Var v -> Type_env.lookup env v, Var v
+        | Annot (msg, a) ->
+          let g = typeof labels env a in
+          data g, Annot (msg, g)
+        | Fail msg -> Type.eps, Fail msg
+      in
+      typeof [] env g0
    ;;
   end
 

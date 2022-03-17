@@ -3,10 +3,12 @@ struct
   module Token = Token
 
   type t =
-    { first : Token.Set.t
+    { first : Token.Set.t (** The set of characters which can start a string in [L]. *)
     ; flast : Token.Set.t
-    ; null : bool
+          (** The set of tokens which fan follow the last character of a string in [L]. *)
+    ; null : bool (** Is the empty string in [L]? *)
     ; guarded : bool
+          (** Tracks whether a variable is in the guarded or unguarded context. *)
     }
 
   let pp_set ppf set = Token.Set.pp ppf set
@@ -40,12 +42,15 @@ struct
     Token.Set.(is_empty (inter t1.first t2.first)) && not (t1.null && t2.null)
   ;;
 
-  let alt t1 t2 =
+  let pp_labels ppf labels = Fmt.(list string ~sep:(any ".")) ppf (List.rev labels)
+
+  let alt labels pp_g t1 t2 =
     Prelude.type_assert (apart t1 t2) (fun ppf () ->
         Fmt.pf
           ppf
           "@[<v 2>alt must be apart@;\
            @[(%a@ vs@ %a)@]@;\
+           @[<v 2>parser @[(%a)@]:@ %a@]@;\
            conditions:@;\
            <0 2>(is_empty (inter t1.first t2.first)): %b@;\
            <0 2>not (t1.null && t2.null):%b@]"
@@ -53,6 +58,10 @@ struct
           t1
           pp
           t2
+          pp_labels
+          labels
+          pp_g
+          ()
           Token.Set.(is_empty (inter t1.first t2.first))
           (not (t1.null && t2.null)));
     { first = Token.Set.union t1.first t2.first
@@ -62,12 +71,13 @@ struct
     }
   ;;
 
-  let seq t1 t2 =
+  let seq labels pp_g t1 t2 =
     Prelude.type_assert (separable t1 t2) (fun ppf () ->
         Fmt.pf
           ppf
           "@[<v 2>seq must be separable@;\
            @[(%a@ vs@ %a)@]@;\
+           @[<v 2>parser @[(%a)@]:@ %a@]@;\
            conditions:@;\
            <0 2>(is_empty (inter t1.flast t2.first)): %b@;\
            <0 2>not t1.null: %b@]"
@@ -75,6 +85,10 @@ struct
           t1
           pp
           t2
+          pp_labels
+          labels
+          pp_g
+          ()
           Token.Set.(is_empty (inter t1.flast t2.first))
           (not t1.null));
     { first = t1.first
@@ -84,7 +98,10 @@ struct
     }
   ;;
 
-  let star t = { (seq t t) with null = true; flast = Token.Set.union t.flast t.first }
+  let star labels pp_g t =
+    { (seq labels pp_g t t) with null = true; flast = Token.Set.union t.flast t.first }
+  ;;
+
   let min = { first = empty; flast = empty; null = false; guarded = false }
 
   let fix f =

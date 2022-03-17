@@ -77,9 +77,9 @@ module type Type = sig
   val bot : t
   val eps : t
   val tok : Token.Set.t -> t
-  val alt : t -> t -> t
-  val seq : t -> t -> t
-  val star : t -> t
+  val alt : string list -> unit Fmt.t -> t -> t -> t
+  val seq : string list -> unit Fmt.t -> t -> t -> t
+  val star : string list -> unit Fmt.t -> t -> t
   val fix : (t -> t) -> t
 end
 
@@ -232,7 +232,7 @@ module type Parser = sig
 
   (** Parse a construction. See {!parse'_exn} for more control.
 
-      Raises {!Prelude.Parse_error}. *)
+      Raises {!Prelude.Parse_error} / {!Prelude.Type_error}. *)
   val parse_exn : 'a Construction.t -> 'a parser
 end
 
