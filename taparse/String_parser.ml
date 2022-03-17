@@ -88,13 +88,21 @@ let%test_module _ =
 
     let mk_gram p = p.tdb []
     let typeof' p = typeof [] (mk_gram p)
-    let go ty = Fmt.pr "%a@." Type.pp (typeof' ty)
+
+    let go ty =
+      try Fmt.pr "%a@." Type.pp (typeof' ty) with Type_error fmt -> Fmt.pr "%a@." fmt ()
+    ;;
 
     let%expect_test "typechecking" =
       go (eps ());
       go (ctok 'a');
       go bot;
       go upper;
+      go (seq (star (ctok 'a')) (ctok 'b'));
+      go
+        (alt
+           (plus (ctok 'a'))
+           (seq (ctok 'a') (star (ctok 'b')) ==> fun (x, xs) -> x :: xs));
       [%expect
         {|
         {first: [];
@@ -112,7 +120,31 @@ let%test_module _ =
         {first: [A-Z];
          flast: [];
          null: false;
-         guarded: true} |}]
+         guarded: true}
+        seq must be separable
+          ({first: a;
+            flast: a;
+            null: true;
+            guarded: true}
+          vs {first: b;
+              flast: [];
+              null: false;
+              guarded: true})
+          conditions:
+            (is_empty (inter t1.flast t2.first)): true
+            not t1.null: false
+        alt must be apart
+          ({first: a;
+            flast: a;
+            null: false;
+            guarded: true}
+          vs {first: a;
+              flast: b;
+              null: false;
+              guarded: true})
+          conditions:
+            (is_empty (inter t1.first t2.first)): false
+            not (t1.null && t2.null):true |}]
     ;;
 
     let go p pp str =

@@ -41,9 +41,20 @@ struct
   ;;
 
   let alt t1 t2 =
-    Prelude.assert'
-      (apart t1 t2)
-      (Fmt.str "alt must be apart @[(%a@ vs@ %a)@]" pp t1 pp t2);
+    Prelude.type_assert (apart t1 t2) (fun ppf () ->
+        Fmt.pf
+          ppf
+          "@[<v 2>alt must be apart@;\
+           @[(%a@ vs@ %a)@]@;\
+           conditions:@;\
+           <0 2>(is_empty (inter t1.first t2.first)): %b@;\
+           <0 2>not (t1.null && t2.null):%b@]"
+          pp
+          t1
+          pp
+          t2
+          Token.Set.(is_empty (inter t1.first t2.first))
+          (not (t1.null && t2.null)));
     { first = Token.Set.union t1.first t2.first
     ; flast = Token.Set.union t1.flast t2.flast
     ; null = t1.null || t2.null
@@ -52,9 +63,20 @@ struct
   ;;
 
   let seq t1 t2 =
-    Prelude.assert'
-      (separable t1 t2)
-      (Fmt.str "seq must be separable @[(%a@ vs@ %a)@]" pp t1 pp t2);
+    Prelude.type_assert (separable t1 t2) (fun ppf () ->
+        Fmt.pf
+          ppf
+          "@[<v 2>seq must be separable@;\
+           @[(%a@ vs@ %a)@]@;\
+           conditions:@;\
+           <0 2>(is_empty (inter t1.flast t2.first)): %b@;\
+           <0 2>not t1.null: %b@]"
+          pp
+          t1
+          pp
+          t2
+          Token.Set.(is_empty (inter t1.flast t2.first))
+          (not t1.null));
     { first = t1.first
     ; flast = Token.Set.union t2.flast (t2.null ==> Token.Set.union t2.first t1.flast)
     ; null = false

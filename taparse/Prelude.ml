@@ -29,4 +29,6 @@ struct
  ;;
 end
 
-let assert' b msg = if not b then failwith msg
+exception Type_error of unit Fmt.t
+
+let type_assert b msg = if not b then raise (Type_error msg)
