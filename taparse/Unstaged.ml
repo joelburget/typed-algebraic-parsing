@@ -179,7 +179,7 @@ module Make (Token_stream : Signatures.Token_stream) :
     ;;
 
     let pp_tree : type ctx a d. (ctx, a, d) t' Fmt.t =
-     fun ppf t -> Prelude.Tree.pp ppf (mk_tree t)
+     fun ppf t -> Prelude.Tree.pp ~levels:8 ppf (mk_tree t)
    ;;
 
     let pp_labels ppf labels = Fmt.(list string ~sep:(any ".")) ppf (List.rev labels)

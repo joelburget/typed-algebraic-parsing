@@ -53,21 +53,28 @@ module Tree : sig
     }
 
   val mk : string -> t list -> t
-  val pp : t Fmt.t
+  val pp : ?levels:int -> t Fmt.t
 end = struct
   type t =
     { label : string
     ; children : t list
     }
 
-  let rec pp ppf { label; children } =
+  let rec pp ?levels ppf { label; children } =
+    let open Fmt in
     match children with
-    | [] -> Fmt.string ppf label
-    | _ -> Fmt.(vbox ~indent:2 (pair string (list pp))) ppf (label, children)
+    | [] -> string ppf label
+    | _ ->
+      (match levels with
+      | None ->
+        (vbox ~indent:2 (pair string (list (pp ?levels:None)))) ppf (label, children)
+      | Some 0 -> Fmt.pf ppf "%s ..." label
+      | Some n ->
+        vbox ~indent:2 (pair string (list (pp ~levels:(n - 1)))) ppf (label, children))
   ;;
 
   let mk label children = { label; children }
-  let go = Fmt.pr "%a@." pp
+  let go = Fmt.pr "%a@." (pp ?levels:None)
 
   let%expect_test _ =
     go (mk "root" []);
