@@ -88,7 +88,7 @@ struct
            @[(%a@ vs@ %a)@]@;\
            conditions:@;\
            <0 2>(is_empty (inter t1.flast t2.first)): %b@;\
-           <0 2>not t1.null: %b@;\
+           <0 2>not (t1.null && t2.null): %b@;\
            @[<v 2>parser%a:@ %a@]@;\
            @]"
           pp
@@ -96,7 +96,7 @@ struct
           pp
           t2
           Token.Set.(is_empty (inter t1.flast t2.first))
-          (not t1.null)
+          (not (t1.null && t2.null))
           pp_labels
           labels
           pp_g
