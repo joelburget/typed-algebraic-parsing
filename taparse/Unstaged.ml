@@ -133,12 +133,12 @@ module Make (Token_stream : Signatures.Token_stream) :
       | Fail msg -> Some (Fmt.str "Fail %S" msg)
     ;;
 
-    let mk_tree : type ctx a d. (ctx, a, d) t' -> Prelude.Tree.t =
+    let mk_tree : type ctx a d. (ctx, a, d) t' -> Tree_fmt.t =
       let open Prelude in
       let open Grammar_provenance in
-      let open Tree in
+      let open Tree_fmt in
       let rec collect_children
-          : type ctx a d. Tree.t list -> (ctx, a, d) t' -> Tree.t list
+          : type ctx a d. Tree_fmt.t list -> (ctx, a, d) t' -> Tree_fmt.t list
         =
        fun children g ->
         match g with
@@ -178,8 +178,8 @@ module Make (Token_stream : Signatures.Token_stream) :
         | children -> mk "(root)" children
     ;;
 
-    let pp_tree : type ctx a d. (ctx, a, d) t' Fmt.t =
-     fun ppf t -> Prelude.Tree.pp ~levels:8 ppf (mk_tree t)
+    let pp_tree : type ctx a d. int option -> (ctx, a, d) t' Fmt.t =
+     fun max_depth ppf t -> Tree_fmt.pp ?max_depth ppf (mk_tree t)
    ;;
 
     let pp_labels ppf labels = Fmt.(list string ~sep:(any ".")) ppf (List.rev labels)
@@ -191,7 +191,7 @@ module Make (Token_stream : Signatures.Token_stream) :
             string list -> ctx Type_env.t -> (ctx, a, d) t -> (ctx, a, Type.t) t
         =
        fun labels env (_, g) ->
-        let pp_g ppf () = pp_tree ppf g in
+        let pp_g ppf max_depth = pp_tree max_depth ppf g in
         let labels =
           match label g with None -> labels | Some label -> label :: labels
         in
