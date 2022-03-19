@@ -90,7 +90,8 @@ let%test_module _ =
     let typeof' p = typeof [] (mk_gram p)
 
     let go ty =
-      try Fmt.pr "%a@." Type.pp (typeof' ty) with Type_error fmt -> Fmt.pr "%a@." fmt ()
+      try Fmt.pr "%a@." Type.pp (typeof' ty) with
+      | Type_error fmt -> Fmt.pr "%a@." fmt (Some 8)
     ;;
 
     let%expect_test "typechecking" =
@@ -158,7 +159,8 @@ let%test_module _ =
         | None -> Fmt.pr "@[%a@]@." pp parsed
         | Some _ -> Fmt.pr "@[parsed with leftovers:@ %a@]@." pp parsed
       with
-      | Parse_error msg -> Fmt.pr "failed parse: %s@." msg
+      | Parse_error msg -> Fmt.pr "Parse error: %s@." msg
+      | Type_error msg -> Fmt.pr "Type error: %a@." msg None
     ;;
 
     let%expect_test "tok" =
@@ -166,7 +168,7 @@ let%test_module _ =
       go (ctok 'c') Token.pp "d";
       [%expect {|
         c
-        failed parse: Unexpected token 'd' (expected 'c') |}]
+        Parse error: Unexpected token 'd' (expected 'c') |}]
     ;;
 
     let%expect_test "unicode tok" =
@@ -184,7 +186,7 @@ let%test_module _ =
 
     let%expect_test "bot" =
       go bot (Fmt.any "()") "c";
-      [%expect {| failed parse: bottom |}]
+      [%expect {| Parse error: bottom |}]
     ;;
 
     let%expect_test "seq" =
@@ -199,7 +201,7 @@ let%test_module _ =
       [%expect {|
         a
         b
-        failed parse: No progress possible (<|>) |}]
+        Parse error: No progress possible (<|>) |}]
     ;;
 
     let%expect_test "star, plus, map" =
@@ -215,7 +217,7 @@ let%test_module _ =
         {|
 
         aaa
-        failed parse: Unexpected end of stream
+        Parse error: Unexpected end of stream
         aaa
         AAA |}]
     ;;
@@ -253,22 +255,87 @@ let%test_module _ =
       [%expect
         {|
         a
-        failed parse: Unexpected token 'c' (expected '[ab]')
-        failed parse: Unexpected token 'a' (expected '[A-Z]')
+        Parse error: Unexpected token 'c' (expected '[ab]')
+        Parse error: Unexpected token 'a' (expected '[A-Z]')
         A
         a
-        failed parse: Unexpected token 'A' (expected '[a-z]')
-        failed parse: Unexpected token 'A' (expected '[a-z]') |}]
+        Parse error: Unexpected token 'A' (expected '[a-z]')
+        Parse error: Unexpected token 'A' (expected '[a-z]') |}]
     ;;
 
     let%expect_test "fail" =
       let go' = go (fail "msg" <?> "foo" <?> "bar") Token.pp in
       go' "A";
-      [%expect
-        {|
-      failed parse: msg (foo,
+      [%expect {|
+      Parse error: msg (foo,
       bar) |}]
     ;;
+
+    let%expect_test "sep_by, sep_by1" =
+      let go' p = go p (Fmt.list Token.pp) in
+      let p = sep_by (ctok 'a') (ctok 'b') in
+      go' p "";
+      go' p "b";
+      go' p "bab";
+      go' p "babab";
+      let p1 = sep_by1 (ctok 'a') (ctok 'b') in
+      go' p1 "";
+      go' p1 "b";
+      go' p1 "bab";
+      go' p1 "babab";
+      [%expect
+        {|
+        b
+        bb
+        bbb
+        Parse error: Unexpected end of stream
+        b
+        bb
+        bbb |}]
+    ;;
+
+    (*
+    let%expect_test "sep_end_by, sep_end_by1" =
+      let go' p = go p (Fmt.list Token.pp) in
+      let p = sep_end_by (ctok 'a') (ctok 'b') in
+      go' p "";
+      (*
+      go' p "b";
+      go' p "ba";
+      go' p "baba";
+      let p1 = sep_end_by1 (ctok 'a') (ctok 'b') in
+      go' p1 "";
+      go' p1 "b";
+      go' p1 "ba";
+      go' p1 "baab";
+         *)
+      [%expect
+        {|
+        Type error: seq must be separable
+                      ({first: b;
+                        flast: a;
+                        null: true;
+                        guarded: true}
+                      vs {first: a;
+                          flast: [];
+                          null: true;
+                          guarded: true})
+                      conditions:
+                        (is_empty (inter t1.flast t2.first)): false
+                        not (t1.null && t2.null): false
+                      parser (sep_end_by.<*):
+                          (root)
+                            ├ Tok a
+                            ├ Eps
+                            └ sep_by
+                              ├ sep_by1
+                            │   ├ Star
+                            │ │   ├ Tok b
+                            │     └ Tok a
+                                └ Tok b
+                              └ Eps |}]
+    ;;
+    *)
 
     let%expect_test "sexp" =
       let go' = go Sexp.sexp Sexp.pp in

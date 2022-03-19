@@ -53,7 +53,7 @@ struct
   ;;
 
   let alt labels pp_g t1 t2 =
-    Prelude.type_assert (apart t1 t2) (fun ppf () ->
+    Prelude.type_assert (apart t1 t2) (fun ppf depth ->
         Fmt.pf
           ppf
           "@[<v 2>alt must be apart@;\
@@ -72,7 +72,7 @@ struct
           pp_labels
           labels
           pp_g
-          ());
+          depth);
     { first = Token.Set.union t1.first t2.first
     ; flast = Token.Set.union t1.flast t2.flast
     ; null = t1.null || t2.null
@@ -81,7 +81,7 @@ struct
   ;;
 
   let seq labels pp_g t1 t2 =
-    Prelude.type_assert (separable t1 t2) (fun ppf () ->
+    Prelude.type_assert (separable t1 t2) (fun ppf depth ->
         Fmt.pf
           ppf
           "@[<v 2>seq must be separable@;\

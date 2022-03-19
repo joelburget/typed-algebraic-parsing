@@ -36,9 +36,9 @@ struct
  ;;
 end
 
-exception Type_error of unit Fmt.t
+exception Type_error of int option Fmt.t
 
-let type_assert b msg = if not b then raise (Type_error msg)
+let type_assert b fmt_msg = if not b then raise (Type_error fmt_msg)
 
 module Grammar_provenance = struct
   type t =

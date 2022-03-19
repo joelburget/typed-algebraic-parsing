@@ -213,8 +213,14 @@ module Make (Token_stream : Signatures.Token_stream) :
           data g, Map (provenance, f, g)
         | Fix (provenance, g') ->
           let ty = Type.fix (fun ty -> data (typeof labels (ty :: env) g')) in
-          Prelude.type_assert ty.Type.guarded (fun ppf () ->
-              Fmt.pf ppf "fix must be guarded @[(%a@ ->@ %a)@]" pp_labels labels pp_tree g);
+          Prelude.type_assert ty.Type.guarded (fun ppf max_depth ->
+              Fmt.pf
+                ppf
+                "fix must be guarded @[(%a@ ->@ %a)@]"
+                pp_labels
+                labels
+                (pp_tree max_depth)
+                g);
           let g' = typeof labels (ty :: env) g' in
           data g', Fix (provenance, g')
         | Star (provenance, g') ->

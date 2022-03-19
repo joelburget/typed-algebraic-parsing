@@ -77,9 +77,9 @@ module type Type = sig
   val bot : t
   val eps : t
   val tok : Token.Set.t -> t
-  val alt : string list -> unit Fmt.t -> t -> t -> t
-  val seq : string list -> unit Fmt.t -> t -> t -> t
-  val star : string list -> unit Fmt.t -> t -> t
+  val alt : string list -> int option Fmt.t -> t -> t -> t
+  val seq : string list -> int option Fmt.t -> t -> t -> t
+  val star : string list -> int option Fmt.t -> t -> t
   val fix : (t -> t) -> t
 end
 
