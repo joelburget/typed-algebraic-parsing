@@ -114,6 +114,19 @@ module Flat_pp_command = struct
   ;;
 end
 
+module Child_status = struct
+  type t =
+    | Is_root
+    | Is_inner_child
+    | Is_last_child
+
+  let connector = function
+    | Is_root -> ""
+    | Is_inner_child -> (* right-facing tee *) "\u{251C} "
+    | Is_last_child -> (* right-facing l *) "\u{2514} "
+  ;;
+end
+
 module Pp_command = struct
   type t =
     | Box of t list
@@ -132,86 +145,78 @@ module Pp_command = struct
     go cmd;
     Queue.to_list queue
   ;;
+
+  let rec generate status max_depth current_depth spanning_levels { label; children } =
+    let next_depth = current_depth + 1 in
+    let connector = Child_status.connector status in
+    let pp_line content =
+      let spanning_levels' =
+        match status, spanning_levels with
+        (* (connect to parent with a tee -- don't show a bar) *)
+        | Is_inner_child, _ :: levels -> levels
+        | _, levels -> levels
+      in
+      Line_printing_command
+        { spanning_levels = List.rev spanning_levels' (* TODO: better data structure *)
+        ; indents = current_depth
+        ; content
+        }
+    in
+    match children, max_depth with
+    | [], _ -> pp_line (connector ^ label)
+    | _, Some n when n <= current_depth -> pp_line (Fmt.str "%s%s ..." connector label)
+    | _ ->
+      (* TODO: better data structure *)
+      let last_child = List.last_exn children in
+      let generate child_status = generate child_status max_depth next_depth in
+      let inner_child_cmds =
+        children
+        |> List.drop_last_exn
+        |> List.map ~f:(generate Is_inner_child (next_depth :: spanning_levels))
+      in
+      let cmds =
+        [ pp_line (connector ^ label) ]
+        @ inner_child_cmds
+        @ [ generate Is_last_child spanning_levels last_child ]
+      in
+      Box cmds
+  ;;
 end
 
-type status =
-  | Is_root
-  | Is_inner_child
-  | Is_last_child
-
-let connector = function
-  | Is_root -> ""
-  | Is_inner_child -> (* right-facing tee *) "\u{251C} "
-  | Is_last_child -> (* right-facing l *) "\u{2514} "
-;;
-
-let rec pp_command status max_depth current_depth spanning_levels { label; children } =
-  let next_depth = current_depth + 1 in
-  let connector = connector status in
-  let pp_line content =
-    let spanning_levels' =
-      match status, spanning_levels with
-      (* (connect to parent with a tee -- don't show a bar) *)
-      | Is_inner_child, _ :: levels -> levels
-      | _, levels -> levels
-    in
-    Pp_command.Line_printing_command
-      { spanning_levels = List.rev spanning_levels' (* TODO: better data structure *)
-      ; indents = current_depth
-      ; content
-      }
-  in
-  match children, max_depth with
-  | [], _ -> pp_line (connector ^ label)
-  | _, Some n when n <= current_depth -> pp_line (Fmt.str "%s%s ..." connector label)
-  | _ ->
-    (* TODO: better data structure *)
-    let last_child = List.last_exn children in
-    let pp_command child_status = pp_command child_status max_depth next_depth in
-    let inner_child_cmds =
-      children
-      |> List.drop_last_exn
-      |> List.map ~f:(pp_command Is_inner_child (next_depth :: spanning_levels))
-    in
-    let cmds =
-      [ pp_line (connector ^ label) ]
-      @ inner_child_cmds
-      @ [ pp_command Is_last_child spanning_levels last_child ]
-    in
-    Box cmds
-;;
-
 let pp status max_depth current_depth spanning_levels ppf tree =
-  pp_command status max_depth current_depth spanning_levels tree
+  Pp_command.generate status max_depth current_depth spanning_levels tree
   |> Pp_command.flatten
   |> List.iter ~f:(Flat_pp_command.run ppf)
 ;;
 
 let pp ?max_depth ppf t = pp Is_root max_depth 0 [] ppf t
 let mk label children = { label; children }
-let go ?max_depth = Fmt.pr "%a@." (pp ?max_depth)
 
-let%expect_test "pp" =
-  go (mk "root" []);
-  [%expect {| root |}]
-;;
+let%test_module _ =
+  (module struct
+    let go ?max_depth = Fmt.pr "%a@." (pp ?max_depth)
 
-let t =
-  mk
-    "root"
-    [ mk "a" [ mk "c" []; mk "d" []; mk "e" [] ]; mk "b" [ mk "f" []; mk "g" [] ] ]
-;;
+    let%expect_test "pp" =
+      go (mk "root" []);
+      [%expect {| root |}]
+    ;;
 
-let%expect_test "pp_command" =
-  let go tree =
-    tree
-    |> pp_command Is_root None 0 []
-    |> Pp_command.flatten
-    |> List.iter ~f:(Fmt.pr "%a@." Flat_pp_command.pp)
-  in
-  go t;
-  [%expect
-    {|
+    let t =
+      mk
+        "root"
+        [ mk "a" [ mk "c" []; mk "d" []; mk "e" [] ]; mk "b" [ mk "f" []; mk "g" [] ] ]
+    ;;
+
+    let%expect_test "Pp_command.generate" =
+      let go tree =
+        tree
+        |> Pp_command.generate Is_root None 0 []
+        |> Pp_command.flatten
+        |> List.iter ~f:(Fmt.pr "%a@." Flat_pp_command.pp)
+      in
+      go t;
+      [%expect
+        {|
       Open_box
       Line_printing_command { spanning_levels = []; indents = 0; content = "root" }
       Open_box
@@ -233,12 +238,12 @@ let%expect_test "pp_command" =
                             content = "\226\148\148 g" }
       Close_box
       Close_box |}]
-;;
+    ;;
 
-let%expect_test "pp" =
-  go t;
-  [%expect
-    {|
+    let%expect_test "pp" =
+      go t;
+      [%expect
+        {|
       root
         ├ a
         │ ├ c
@@ -247,12 +252,14 @@ let%expect_test "pp" =
         └ b
           ├ f
           └ g |}]
-;;
+    ;;
 
-let%expect_test "pp" =
-  go ~max_depth:1 t;
-  [%expect {|
+    let%expect_test "pp" =
+      go ~max_depth:1 t;
+      [%expect {|
       root
         ├ a ...
         └ b ... |}]
+    ;;
+  end)
 ;;
