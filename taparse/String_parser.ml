@@ -122,7 +122,7 @@ let%test_module _ =
          flast: [];
          null: false;
          guarded: true}
-        {first: a;
+        {first: [ab];
          flast: [];
          null: false;
          guarded: true}
@@ -140,15 +140,25 @@ let%test_module _ =
             not (t1.null && t2.null):true
           parser:
             Alt
-              ==>
-                Seq
-                  Star
-                    Tok b
-                  Tok a
-              plus
-                Star
-                  Tok a
-                Tok a |}]
+              ├ plus
+              │ ├ Tok a
+              │ └ Star
+              │   └ Tok a
+              └ ==>
+                └ Seq
+                  ├ Tok a
+                  └ Star
+                    └ Tok b |}]
+    ;;
+
+    let%expect_test "typechecking" =
+      go (seq (ctok 'a') (star (ctok 'b')) ==> fun (x, xs) -> x :: xs);
+      [%expect
+        {|
+        {first: a;
+         flast: b;
+         null: false;
+         guarded: true} |}]
     ;;
 
     let go p pp str =
@@ -294,7 +304,6 @@ let%test_module _ =
         bbb |}]
     ;;
 
-    (*
     let%expect_test "sep_end_by, sep_end_by1" =
       let go' p = go p (Fmt.list Token.pp) in
       let p = sep_end_by ~sep:(ctok 'a') (ctok 'b') in
@@ -324,18 +333,17 @@ let%test_module _ =
                         (is_empty (inter t1.flast t2.first)): false
                         not (t1.null && t2.null): false
                       parser (sep_end_by.<*):
-                          (root)
-                            ├ Tok a
-                            ├ Eps
-                            └ sep_by
-                              ├ sep_by1
-                            │   ├ Star
-                            │ │   ├ Tok b
-                            │     └ Tok a
-                                └ Tok b
-                              └ Eps |}]
+                        (root)
+                          ├ sep_by
+                          │ ├ Eps
+                          │ └ sep_by1
+                          │   ├ Tok b
+                          │   └ Star
+                          │     ├ Tok a
+                          │     └ Tok b
+                          ├ Eps
+                          └ Tok a |}]
     ;;
-    *)
 
     let%expect_test "sexp" =
       let go' = go Sexp.sexp Sexp.pp in

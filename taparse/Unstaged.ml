@@ -134,6 +134,7 @@ module Make (Token_stream : Signatures.Token_stream) :
     ;;
 
     let mk_tree : type ctx a d. (ctx, a, d) t' -> Fmt_tree.t =
+      (* TODO: all the list appends are really bad, use a better data structure *)
       let open Prelude in
       let open Grammar_provenance in
       let open Fmt_tree in
@@ -142,11 +143,11 @@ module Make (Token_stream : Signatures.Token_stream) :
         =
        fun children g ->
         match g with
-        | Annot (msg, (_, t)) -> mk msg (collect_children [] t) :: children
-        | Eps _ -> mk "Eps" [] :: children
+        | Annot (msg, (_, t)) -> children @ [ mk msg (collect_children [] t) ]
+        | Eps _ -> children @ [ mk "Eps" [] ]
         | Seq (provenance, (_, a), (_, b)) -> binary provenance children "Seq" a b
-        | Tok tok_set -> mk (Fmt.str "Tok %a" Token.Set.pp tok_set) [] :: children
-        | Bot -> mk "Bot" [] :: children
+        | Tok tok_set -> children @ [ mk (Fmt.str "Tok %a" Token.Set.pp tok_set) [] ]
+        | Bot -> children @ [ mk "Bot" [] ]
         | Alt (provenance, msg, (_, a), (_, b)) ->
           let label =
             match msg with None -> "Alt" | Some msg -> Fmt.str "Alt ~failure_msg:%S" msg
@@ -155,21 +156,21 @@ module Make (Token_stream : Signatures.Token_stream) :
         | Map (provenance, _, (_, a)) -> unary provenance children "Map" a
         | Fix (provenance, (_, a)) -> unary provenance children "Fix" a
         | Star (provenance, (_, a)) -> unary provenance children "Star" a
-        | Var v -> mk (Fmt.str "Var %a" Var.pp v) [] :: children
-        | Fail msg -> mk (Fmt.str "Fail %S" msg) [] :: children
+        | Var v -> children @ [ mk (Fmt.str "Var %a" Var.pp v) [] ]
+        | Fail msg -> children @ [ mk (Fmt.str "Fail %S" msg) [] ]
       and binary : type ctx a b d. _ -> _ -> _ -> (ctx, a, d) t' -> (ctx, b, d) t' -> _ =
        fun provenance children label a b ->
         match provenance with
         | User_defined ->
           let children' = collect_children (collect_children [] a) b in
-          mk label children' :: children
+          children @ [ mk label children' ]
         | Generated -> collect_children (collect_children children a) b
       and unary : type ctx a d. _ -> _ -> _ -> (ctx, a, d) t' -> _ =
        fun provenance children label a ->
         match provenance with
         | User_defined ->
           let children' = collect_children [] a in
-          mk label children' :: children
+          children @ [ mk label children' ]
         | Generated -> collect_children children a
       in
       fun g0 ->
