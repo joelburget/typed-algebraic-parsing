@@ -174,8 +174,10 @@ module type Library = sig
   val infixr : ('a -> 'a -> 'a) t -> 'a t -> 'a t
   val infixl : ('a -> 'a -> 'a) t -> 'a t -> 'a t
   val infix : (assoc * ('a -> 'a -> 'a) t) list -> 'a t -> 'a t
-  val sep_by : 'a t -> 'b t -> 'b list t
-  val sep_by1 : 'a t -> 'b t -> 'b list t
+  val sep_by : sep:'a t -> 'b t -> 'b list t
+  val sep_by1 : sep:'a t -> 'b t -> 'b list t
+  val sep_end_by : sep:'a t -> 'b t -> 'b list t
+  val sep_end_by1 : sep:'a t -> 'b t -> 'b list t
   val ( <* ) : 'a t -> _ t -> 'a t
   val ( *> ) : _ t -> 'a t -> 'a t
   val ( <|> ) : 'a t -> 'a t -> 'a t

@@ -100,9 +100,9 @@ struct
           pp_labels
           labels
           pp_g
-          ());
-    { first = t1.first
-    ; flast = Token.Set.union t2.flast (t2.null ==> Token.Set.union t2.first t1.flast)
+          depth);
+    { first = Token.Set.union t1.first (t1.null ==> t2.first)
+    ; flast = Token.Set.union t2.flast (t2.null ==> t1.flast)
     ; null = false
     ; guarded = t1.guarded
     }

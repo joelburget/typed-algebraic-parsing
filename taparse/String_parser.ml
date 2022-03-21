@@ -51,7 +51,7 @@ module Sexp = struct
         choice
           ~failure_msg:"word or parens"
           [ (word ==> fun sym -> Sym sym)
-          ; (parens (sep_by (ctok ' ') sexp) ==> fun s -> Seq s)
+          ; (parens (sep_by ~sep:(ctok ' ') sexp) ==> fun s -> Seq s)
           ])
   ;;
 end
@@ -273,12 +273,12 @@ let%test_module _ =
 
     let%expect_test "sep_by, sep_by1" =
       let go' p = go p (Fmt.list Token.pp) in
-      let p = sep_by (ctok 'a') (ctok 'b') in
+      let p = sep_by ~sep:(ctok 'a') (ctok 'b') in
       go' p "";
       go' p "b";
       go' p "bab";
       go' p "babab";
-      let p1 = sep_by1 (ctok 'a') (ctok 'b') in
+      let p1 = sep_by1 ~sep:(ctok 'a') (ctok 'b') in
       go' p1 "";
       go' p1 "b";
       go' p1 "bab";
@@ -297,13 +297,13 @@ let%test_module _ =
     (*
     let%expect_test "sep_end_by, sep_end_by1" =
       let go' p = go p (Fmt.list Token.pp) in
-      let p = sep_end_by (ctok 'a') (ctok 'b') in
+      let p = sep_end_by ~sep:(ctok 'a') (ctok 'b') in
       go' p "";
       (*
       go' p "b";
       go' p "ba";
       go' p "baba";
-      let p1 = sep_end_by1 (ctok 'a') (ctok 'b') in
+      let p1 = sep_end_by1 ~sep:(ctok 'a') (ctok 'b') in
       go' p1 "";
       go' p1 "b";
       go' p1 "ba";

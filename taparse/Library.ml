@@ -22,21 +22,23 @@ module Make (Construction : Signatures.Construction with type 'a v = 'a) = struc
 
   let option r = choice ~failure_msg:"option failed" [ eps None; (r ==> fun x -> Some x) ]
   let plus g = g ++ star g ==> (fun (x, xs) -> x :: xs) <?> "plus"
-
-  let sep_by1 sep p =
-    p ++ star (sep ++ p ==> snd) ==> (fun (x, xs) -> x :: xs) <?> "sep_by1"
-  ;;
-
-  let sep_by sep p =
-    option (sep_by1 sep p) ==> (function None -> [] | Some xs -> xs) <?> "sep_by"
-  ;;
-
   let ( <* ) p1 p2 = p1 ++ p2 ==> fst <?> "<*"
   let ( *> ) p1 p2 = p1 ++ p2 ==> snd <?> "*>"
   let ( <|> ) a b = alt a b <?> "<|>"
   let ( >>| ) p f = p ==> f <?> ">>|"
   let ( <$> ) f p = p ==> f <?> "<$>"
   let ( <*> ) fp p = fp ++ p ==> (fun (f, a) -> f a) <?> "<*>"
+
+  let sep_by1 ~sep p =
+    p ++ star (sep ++ p ==> snd) ==> (fun (x, xs) -> x :: xs) <?> "sep_by1"
+  ;;
+
+  let sep_by ~sep p =
+    option (sep_by1 ~sep p) ==> (function None -> [] | Some xs -> xs) <?> "sep_by"
+  ;;
+
+  let sep_end_by ~sep p = sep_by ~sep p <* option sep <?> "sep_end_by"
+  let sep_end_by1 ~sep p = sep_by1 ~sep p <* option sep <?> "sep_end_by1"
 
   module Let_syntax = struct
     let return a = eps a <?> "return"
