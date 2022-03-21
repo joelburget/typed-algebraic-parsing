@@ -40,6 +40,17 @@ let lex' rules str start0 =
 
 let lex rules str = lex' rules str 0
 
+let pp_action pp_a ppf = function
+  | Skip -> Fmt.pf ppf "Skip"
+  | Error msg -> Fmt.pf ppf "Error %S" msg
+  | Return a -> Fmt.pf ppf "Return %a" pp_a a
+;;
+
+let pp pp_a =
+  let pp_regex ppf = Fmt.pf ppf "@[/%a/@]" Regex.pp in
+  Fmt.(vbox (list ~sep:cut (box (pair ~sep:(any "@ ->@ ") pp_regex (pp_action pp_a)))))
+;;
+
 let%test_module "lex" =
   (module struct
     let pp_action ppf action =

@@ -26,3 +26,6 @@ val lex : 'a t -> string -> ('a match_ list, int) Result.t
 
 (** Lex starting from the given point in the string. *)
 val lex' : 'a t -> string -> int -> ('a match_ list, int) Result.t
+
+(** Pretty-print a lexer *)
+val pp : 'a Fmt.t -> 'a t Fmt.t
