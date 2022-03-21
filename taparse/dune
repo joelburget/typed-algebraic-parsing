@@ -1,7 +1,7 @@
 (library
  (name taparse)
  (public_name taparse)
- (libraries base diet fmt char-class uutf)
+ (libraries base char-class diet fmt fmt-tree uutf)
  (inline_tests)
  (preprocess
   (pps ppx_jane)))

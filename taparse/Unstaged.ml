@@ -133,12 +133,12 @@ module Make (Token_stream : Signatures.Token_stream) :
       | Fail msg -> Some (Fmt.str "Fail %S" msg)
     ;;
 
-    let mk_tree : type ctx a d. (ctx, a, d) t' -> Tree_fmt.t =
+    let mk_tree : type ctx a d. (ctx, a, d) t' -> Fmt_tree.t =
       let open Prelude in
       let open Grammar_provenance in
-      let open Tree_fmt in
+      let open Fmt_tree in
       let rec collect_children
-          : type ctx a d. Tree_fmt.t list -> (ctx, a, d) t' -> Tree_fmt.t list
+          : type ctx a d. Fmt_tree.t list -> (ctx, a, d) t' -> Fmt_tree.t list
         =
        fun children g ->
         match g with
@@ -179,7 +179,7 @@ module Make (Token_stream : Signatures.Token_stream) :
     ;;
 
     let pp_tree : type ctx a d. int option -> (ctx, a, d) t' Fmt.t =
-     fun max_depth ppf t -> Tree_fmt.pp ?max_depth ppf (mk_tree t)
+     fun max_depth ppf t -> Fmt_tree.pp ?max_depth ppf (mk_tree t)
    ;;
 
     let pp_labels ppf labels = Fmt.(list string ~sep:(any ".")) ppf (List.rev labels)

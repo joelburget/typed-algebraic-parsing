@@ -1,0 +1,8 @@
+(library
+ (name fmt_tree)
+ (public_name fmt-tree)
+ (libraries base fmt)
+ (inline_tests)
+ (preprocess
+  (pps ppx_jane))
+ (wrapped false))

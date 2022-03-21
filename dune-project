@@ -16,6 +16,18 @@
 (maintainers "joelburget@gmail.com")
 
 (package
+ (name fmt-tree)
+ (synopsis "Tree-printing extension to fmt")
+ ; (description "TODO")
+ (depends
+  (fmt
+   (>= 0.9.0))
+  (base
+   (and
+    (>= 0.14.0)
+    (< v0.15.0)))))
+
+(package
  (name structures)
  (synopsis "Helpers and laws for algebraic structures")
  ; (description "TODO")
